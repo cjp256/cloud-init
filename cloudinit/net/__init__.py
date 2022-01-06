@@ -11,7 +11,7 @@ import ipaddress
 import logging
 import os
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from cloudinit import subp, util
 from cloudinit.net.network_state import mask_to_net_prefix
@@ -389,6 +389,16 @@ def is_disabled_cfg(cfg):
     return cfg.get("config") == "disabled"
 
 
+def find_candidate_nics(blacklist_drivers=None) -> List[str]:
+    """Return the name of the 'fallback' network device."""
+    if util.is_FreeBSD() or util.is_DragonFlyBSD():
+        return find_candidate_nics_on_freebsd(blacklist_drivers)
+    elif util.is_NetBSD() or util.is_OpenBSD():
+        return find_candidate_nics_on_netbsd_or_openbsd(blacklist_drivers)
+    else:
+        return find_candidate_nics_on_linux(blacklist_drivers)
+
+
 def find_fallback_nic(blacklist_drivers=None):
     """Return the name of the 'fallback' network device."""
     if util.is_FreeBSD() or util.is_DragonFlyBSD():
@@ -399,36 +409,53 @@ def find_fallback_nic(blacklist_drivers=None):
         return find_fallback_nic_on_linux(blacklist_drivers)
 
 
-def find_fallback_nic_on_netbsd_or_openbsd(blacklist_drivers=None):
-    values = list(
-        sorted(get_interfaces_by_mac().values(), key=natural_sort_key)
-    )
-    if values:
-        return values[0]
+def find_candidate_nics_on_netbsd_or_openbsd(
+    blacklist_drivers=None,
+) -> List[str]:
+    return sorted(get_interfaces_by_mac().values(), key=natural_sort_key)
 
 
-def find_fallback_nic_on_freebsd(blacklist_drivers=None):
-    """Return the name of the 'fallback' network device on FreeBSD.
+def find_fallback_nic_on_netbsd_or_openbsd(
+    blacklist_drivers=None,
+) -> Optional[str]:
+    names = find_candidate_nics_on_netbsd_or_openbsd(blacklist_drivers)
+    if names:
+        return names[0]
+
+    return None
+
+
+def find_candidate_nics_on_freebsd(blacklist_drivers=None) -> List[str]:
+    """Return the names of the candidate network devices on FreeBSD.
 
     @param blacklist_drivers: currently ignored
-    @return default interface, or None
-
-
-    we'll use the first interface from ``ifconfig -l -u ether``
+    @return List of interfaces.
     """
     stdout, _stderr = subp.subp(["ifconfig", "-l", "-u", "ether"])
     values = stdout.split()
     if values:
-        return values[0]
+        return values
+
     # On FreeBSD <= 10, 'ifconfig -l' ignores the interfaces with DOWN
     # status
-    values = list(get_interfaces_by_mac().values())
-    values.sort()
-    if values:
-        return values[0]
+    return sorted(get_interfaces_by_mac().values(), key=natural_sort_key)
 
 
-def find_fallback_nic_on_linux(blacklist_drivers=None):
+def find_fallback_nic_on_freebsd(blacklist_drivers=None) -> Optional[str]:
+    """Return the name of the 'fallback' network device on FreeBSD.
+
+    @param blacklist_drivers: currently ignored
+    @return default interface, or None
+    """
+    names = find_candidate_nics_on_freebsd(blacklist_drivers)
+
+    if names:
+        return names[0]
+
+    return None
+
+
+def find_candidate_nics_on_linux(blacklist_drivers=None) -> List[str]:
     """Return the name of the 'fallback' network device on Linux."""
     if not blacklist_drivers:
         blacklist_drivers = []
@@ -494,13 +521,16 @@ def find_fallback_nic_on_linux(blacklist_drivers=None):
     # don't bother with interfaces that might not be connected if there are
     # some that definitely are
     if connected:
-        potential_interfaces = connected
-    else:
-        potential_interfaces = possibly_connected
+        return sorted(connected, key=natural_sort_key)
+
+    return sorted(possibly_connected, key=natural_sort_key)
+
+
+def find_fallback_nic_on_linux(blacklist_drivers=None) -> Optional[str]:
+    names = find_candidate_nics_on_linux(blacklist_drivers)
 
     # if eth0 exists use it above anything else, otherwise get the interface
     # that we can read 'first' (using the sorted definition of first).
-    names = list(sorted(potential_interfaces, key=natural_sort_key))
     if DEFAULT_PRIMARY_INTERFACE in names:
         names.remove(DEFAULT_PRIMARY_INTERFACE)
         names.insert(0, DEFAULT_PRIMARY_INTERFACE)
@@ -509,6 +539,7 @@ def find_fallback_nic_on_linux(blacklist_drivers=None):
     for name in names:
         if read_sys_net_safe(name, "address"):
             return name
+
     return None
 
 
