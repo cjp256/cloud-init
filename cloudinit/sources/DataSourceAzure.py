@@ -15,7 +15,7 @@ from collections import namedtuple
 from enum import Enum
 from functools import partial
 from time import sleep, time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from xml.dom import minidom
 
 import requests
@@ -178,12 +178,19 @@ def find_dev_from_busdev(camcontrol_out: str, busdev: str) -> Optional[str]:
     return None
 
 
-def execute_or_debug(cmd, fail_ret=None) -> str:
+def execute_or_debug(cmd: List[str], fail_ret=None) -> str:
     try:
-        return subp.subp(cmd)[0]  # type: ignore
-    except subp.ProcessExecutionError:
-        LOG.debug("Failed to execute: %s", " ".join(cmd))
+        stdout, _ = subp.subp(cmd)
+    except subp.ProcessExecutionError as error:
+        LOG.debug(
+            "Failed to execute: %s: (stdout=%r) (stderr=%r)",
+            " ".join(cmd),
+            error.stdout,
+            error.stderr,
+        )
         return fail_ret
+
+    return stdout
 
 
 def get_dev_storvsc_sysctl():

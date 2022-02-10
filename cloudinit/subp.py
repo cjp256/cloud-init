@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 from errno import ENOEXEC
+from typing import overload, Literal, Sequence, Tuple
 
 LOG = logging.getLogger(__name__)
 
@@ -153,8 +154,46 @@ class ProcessExecutionError(IOError):
         return text.rstrip(cr).replace(cr, cr + indent)
 
 
+@overload
 def subp(
-    args,
+    args: Sequence[str] = ...,
+    data=...,
+    rcs=...,
+    env=...,
+    capture: Literal[True] = ...,
+    combine_capture=...,
+    shell=...,
+    logstring=...,
+    decode: str = ...,
+    target=...,
+    update_env=...,
+    status_cb=...,
+    cwd=...,
+) -> Tuple[str, str]:
+    ...
+
+
+@overload
+def subp(
+    args: Sequence[str] = ...,
+    data=...,
+    rcs=...,
+    env=...,
+    capture=...,
+    combine_capture=...,
+    shell=...,
+    logstring=...,
+    decode: Literal[False] = ...,
+    target=...,
+    update_env=...,
+    status_cb=...,
+    cwd=...,
+) -> Tuple[bytes, bytes]:
+    ...
+
+
+def subp(
+    args: Sequence[str],
     data=None,
     rcs=None,
     env=None,
@@ -162,12 +201,12 @@ def subp(
     combine_capture=False,
     shell=False,
     logstring=False,
-    decode="replace",
+    decode: bool | str = "replace",
     target=None,
     update_env=None,
     status_cb=None,
     cwd=None,
-):
+) -> Tuple[bytes | str, bytes | str]:
     """Run a subprocess.
 
     :param args: command to run in a list. [cmd, arg1, arg2...]
