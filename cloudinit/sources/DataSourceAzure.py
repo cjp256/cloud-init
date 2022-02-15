@@ -10,6 +10,7 @@ import datetime
 import os
 import os.path
 import re
+import traceback
 import xml.etree.ElementTree as ET
 from enum import Enum
 from time import sleep, time
@@ -658,6 +659,7 @@ class DataSourceAzure(sources.DataSource):
             report_diagnostic_event(
                 "Could not crawl Azure metadata: %s" % e, logger_func=LOG.error
             )
+            LOG.error("%s", traceback.format_exc())
             self._report_failure(
                 description=DEFAULT_REPORT_FAILURE_USER_VISIBLE_MESSAGE
             )
