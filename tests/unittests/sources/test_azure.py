@@ -1426,7 +1426,7 @@ scbus-1 on xpt0 bus 0
     @mock.patch("cloudinit.sources.DataSourceAzure.DataSourceAzure._poll_imds")
     @mock.patch(
         "cloudinit.sources.DataSourceAzure.DataSourceAzure."
-        "_wait_for_all_nics_ready"
+        "_wait_for_savable_pps"
     )
     def test_crawl_metadata_waits_for_nic_on_savable_vms(
         self, detect_nics, poll_imds_func, report_ready_func, m_write
@@ -1443,7 +1443,7 @@ scbus-1 on xpt0 bus 0
         dsrc = self._get_ds(data)
         poll_imds_func.return_value = ovfenv
         dsrc.crawl_metadata()
-        self.assertEqual(1, report_ready_func.call_count)
+        self.assertEqual(2, report_ready_func.call_count)
         self.assertEqual(1, detect_nics.call_count)
 
     @mock.patch("cloudinit.sources.DataSourceAzure.util.write_file")
@@ -3047,7 +3047,7 @@ class TestPreprovisioningHotAttachNics(CiTestCase):
     ):
         """Report ready first and then wait for nic detach"""
         dsa = dsaz.DataSourceAzure({}, distro=None, paths=self.paths)
-        dsa._wait_for_all_nics_ready()
+        dsa._finalize_source_pps(dsaz.PPSType.SAVABLE)
         self.assertEqual(1, m_report_ready.call_count)
         self.assertEqual(1, m_wait_for_hot_attached_primary_nic.call_count)
         self.assertEqual(1, m_detach.call_count)
@@ -3104,7 +3104,7 @@ class TestPreprovisioningHotAttachNics(CiTestCase):
         m_dhcpv4.return_value = dhcp_ctx
         m_imds.side_effect = [md]
 
-        dsa._wait_for_all_nics_ready()
+        dsa._wait_for_savable_pps(mock.Mock())
 
         self.assertEqual(1, m_detach.call_count)
         # only wait for primary nic
@@ -3124,7 +3124,7 @@ class TestPreprovisioningHotAttachNics(CiTestCase):
         m_imds.reset_mock()
         m_imds.side_effect = [{}, md]
         dsa = dsaz.DataSourceAzure({}, distro=None, paths=self.paths)
-        dsa._wait_for_all_nics_ready()
+        dsa._wait_for_savable_pps(mock.Mock())
         self.assertEqual(1, m_detach.call_count)
         self.assertEqual(2, m_attach.call_count)
         self.assertEqual(2, m_dhcpv4.call_count)
@@ -3215,7 +3215,7 @@ class TestPreprovisioningHotAttachNics(CiTestCase):
     @mock.patch(
         "cloudinit.sources.helpers.netlink.create_bound_netlink_socket"
     )
-    def test_wait_for_all_nics_ready_raises_if_socket_fails(self, m_socket):
+    def test_wait_for_savable_pps_raises_if_socket_fails(self, m_socket):
         """Waiting for all nics should raise exception if netlink socket
         creation fails."""
 
@@ -3225,9 +3225,11 @@ class TestPreprovisioningHotAttachNics(CiTestCase):
         dsa = dsaz.DataSourceAzure({}, distro=distro, paths=self.paths)
 
         self.assertRaises(
-            netlink.NetlinkCreateSocketError, dsa._wait_for_all_nics_ready
+            netlink.NetlinkCreateSocketError,
+            dsa._finalize_source_pps,
+            dsaz.PPSType.SAVABLE,
         )
-        # dsa._wait_for_all_nics_ready()
+        # dsa._wait_for_savable_pps()
 
 
 @mock.patch("cloudinit.net.find_fallback_nic", return_value="eth9")
@@ -3291,9 +3293,7 @@ class TestPreprovisioningPollIMDS(CiTestCase):
         with mock.patch(MOCKPATH + "REPORTED_READY_MARKER_FILE", report_file):
             dsa._poll_imds()
 
-        assert m_report_ready.mock_calls == [mock.call()]
-
-        self.assertEqual(3, m_dhcp.call_count, "Expected 3 DHCP calls")
+        self.assertEqual(2, m_dhcp.call_count, "Expected 3 DHCP calls")
         self.assertEqual(4, self.tries, "Expected 4 total reads from IMDS")
 
     @mock.patch("os.path.isfile")
@@ -3417,7 +3417,7 @@ class TestPreprovisioningPollIMDS(CiTestCase):
         dsa = dsaz.DataSourceAzure({}, distro=None, paths=self.paths)
         self.assertFalse(os.path.exists(report_file))
         with mock.patch(MOCKPATH + "REPORTED_READY_MARKER_FILE", report_file):
-            dsa._poll_imds()
+            dsa._report_ready_for_pps()
         self.assertEqual(m_report_ready.call_count, 1)
         self.assertTrue(os.path.exists(report_file))
 
@@ -3447,7 +3447,9 @@ class TestPreprovisioningPollIMDS(CiTestCase):
         dsa = dsaz.DataSourceAzure({}, distro=None, paths=self.paths)
         self.assertFalse(os.path.exists(report_file))
         with mock.patch(MOCKPATH + "REPORTED_READY_MARKER_FILE", report_file):
-            self.assertRaises(InvalidMetaDataException, dsa._poll_imds)
+            self.assertRaises(
+                InvalidMetaDataException, dsa._report_ready_for_pps
+            )
         self.assertEqual(m_report_ready.call_count, 1)
         self.assertFalse(os.path.exists(report_file))
 
@@ -3505,7 +3507,7 @@ class TestAzureDataSourcePreprovisioning(CiTestCase):
                 )
             ],
         )
-        self.assertEqual(m_dhcp.call_count, 2)
+        self.assertEqual(m_dhcp.call_count, 1)
         m_net.assert_any_call(
             broadcast="192.168.2.255",
             interface="eth9",
@@ -3514,7 +3516,7 @@ class TestAzureDataSourcePreprovisioning(CiTestCase):
             router="192.168.2.1",
             static_routes=None,
         )
-        self.assertEqual(m_net.call_count, 2)
+        self.assertEqual(m_net.call_count, 1)
 
     def test__reprovision_calls__poll_imds(
         self, m_request, m_dhcp, m_net, m_media_switch
@@ -3557,7 +3559,7 @@ class TestAzureDataSourcePreprovisioning(CiTestCase):
             ),
             m_request.call_args_list,
         )
-        self.assertEqual(m_dhcp.call_count, 2)
+        self.assertEqual(m_dhcp.call_count, 1)
         m_net.assert_any_call(
             broadcast="192.168.2.255",
             interface="eth9",
@@ -3566,7 +3568,7 @@ class TestAzureDataSourcePreprovisioning(CiTestCase):
             router="192.168.2.1",
             static_routes=None,
         )
-        self.assertEqual(m_net.call_count, 2)
+        self.assertEqual(m_net.call_count, 1)
 
 
 class TestRemoveUbuntuNetworkConfigScripts(CiTestCase):
@@ -4287,7 +4289,6 @@ class TestProvisioning:
         assert self.mock_netlink.mock_calls == [
             mock.call.create_bound_netlink_socket(),
             mock.call.wait_for_media_disconnect_connect(mock.ANY, "ethBoot0"),
-            mock.call.create_bound_netlink_socket().__bool__(),
             mock.call.create_bound_netlink_socket().close(),
         ]
 
@@ -4394,7 +4395,6 @@ class TestProvisioning:
             mock.call.create_bound_netlink_socket(),
             mock.call.wait_for_nic_detach_event(nl_sock),
             mock.call.wait_for_nic_attach_event(nl_sock, ["ethAttached1"]),
-            mock.call.create_bound_netlink_socket().__bool__(),
             mock.call.create_bound_netlink_socket().close(),
         ]
 

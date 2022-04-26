@@ -558,8 +558,13 @@ class DataSourceAzure(sources.DataSource):
                 report_diagnostic_event(msg, logger_func=LOG.error)
                 raise sources.InvalidMetaDataException(msg)
 
-            if pps_type == PPSType.SAVABLE:
-                self._wait_for_all_nics_ready()
+            if not os.path.isfile(REPORTED_READY_MARKER_FILE):
+                # Networking is required to report ready.  We may have failed
+                # the first attempt, so check and retry if needed.
+                if not self._is_ephemeral_networking_up():
+                    self._setup_ephemeral_networking(timeout_minutes=20)
+
+                self._finalize_source_pps(pps_type)
 
             md, userdata_raw, cfg, files = self._reprovision()
             # fetch metadata again as it has changed after reprovisioning
@@ -1123,26 +1128,65 @@ class DataSourceAzure(sources.DataSource):
             report_diagnostic_event(str(error), logger_func=LOG.error)
 
     @azure_ds_telemetry_reporter
-    def _wait_for_all_nics_ready(self):
-        """Wait for nic(s) to be hot-attached. There may be multiple nics
-        depending on the customer request.
-        But only primary nic would be able to communicate with wireserver
-        and IMDS. So we detect and save the primary nic to be used later.
-        """
-
-        nl_sock = None
+    def _finalize_source_pps(self, pps_type: PPSType):
+        """Report ready for source PPS and wait until resumed."""
         try:
             nl_sock = netlink.create_bound_netlink_socket()
-            self._report_ready_for_pps()
-            self._teardown_ephemeral_networking()
-            self._wait_for_nic_detach(nl_sock)
-            self._wait_for_hot_attached_primary_nic(nl_sock)
         except netlink.NetlinkCreateSocketError as e:
             report_diagnostic_event(str(e), logger_func=LOG.warning)
             raise
+
+        try:
+            self._report_ready_for_pps()
+
+            if pps_type == PPSType.RUNNING:
+                self._wait_for_running_pps(nl_sock)
+            elif pps_type == PPSType.SAVABLE:
+                self._wait_for_savable_pps(nl_sock)
+            else:
+                report_diagnostic_event(
+                    "Skipping wait for unknown PPS mode",
+                    logger_func=LOG.warning,
+                )
         finally:
-            if nl_sock:
-                nl_sock.close()
+            nl_sock.close()
+
+    @azure_ds_telemetry_reporter
+    def _wait_for_running_pps(self, nl_sock):
+        iface = (
+            self._ephemeral_dhcp_ctx.iface
+            if self._ephemeral_dhcp_ctx
+            else None
+        )
+        if iface is None:
+            raise sources.InvalidMetaDataException("Missing ephemeral context")
+
+        LOG.debug(
+            "Wait for vnetswitch to happen on %s",
+            iface,
+        )
+        with events.ReportEventStack(
+            name="wait-for-media-disconnect-connect",
+            description="wait for vnet switch",
+            parent=azure_ds_reporter,
+        ):
+            try:
+                netlink.wait_for_media_disconnect_connect(nl_sock, iface)
+            except AssertionError as e:
+                report_diagnostic_event(
+                    "Error while waiting for vnet switch: %s" % e,
+                    logger_func=LOG.error,
+                )
+
+        # Teardown old network configuration.
+        self._teardown_ephemeral_networking()
+
+    @azure_ds_telemetry_reporter
+    def _wait_for_savable_pps(self, nl_sock):
+        # Teardown networking as current nics are being unplugged.
+        self._teardown_ephemeral_networking()
+        self._wait_for_nic_detach(nl_sock)
+        self._wait_for_hot_attached_primary_nic(nl_sock)
 
     @azure_ds_telemetry_reporter
     def _poll_imds(self):
@@ -1152,8 +1196,6 @@ class DataSourceAzure(sources.DataSource):
             MetadataType.REPROVISION_DATA.value, IMDS_VER_MIN
         )
         headers = {"Metadata": "true"}
-        nl_sock = None
-        report_ready = bool(not os.path.isfile(REPORTED_READY_MARKER_FILE))
         self.imds_logging_threshold = 1
         self.imds_poll_counter = 1
         dhcp_attempts = 0
@@ -1194,66 +1236,6 @@ class DataSourceAzure(sources.DataSource):
                 logger_func=LOG.warning,
             )
             return False
-
-        if report_ready:
-            # Networking must be up for netlink to detect
-            # media disconnect/connect.  It may be down to due
-            # initial DHCP failure, if so check for it and retry,
-            # ensuring we flag it as required.
-            if not self._is_ephemeral_networking_up():
-                self._setup_ephemeral_networking(timeout_minutes=20)
-
-            try:
-                if (
-                    self._ephemeral_dhcp_ctx is None
-                    or self._ephemeral_dhcp_ctx.iface is None
-                ):
-                    raise RuntimeError("Missing ephemeral context")
-                iface = self._ephemeral_dhcp_ctx.iface
-
-                nl_sock = netlink.create_bound_netlink_socket()
-                self._report_ready_for_pps()
-
-                LOG.debug(
-                    "Wait for vnetswitch to happen on %s",
-                    iface,
-                )
-                with events.ReportEventStack(
-                    name="wait-for-media-disconnect-connect",
-                    description="wait for vnet switch",
-                    parent=azure_ds_reporter,
-                ):
-                    try:
-                        netlink.wait_for_media_disconnect_connect(
-                            nl_sock, iface
-                        )
-                    except AssertionError as e:
-                        report_diagnostic_event(
-                            "Error while waiting for vnet switch: %s" % e,
-                            logger_func=LOG.error,
-                        )
-            except netlink.NetlinkCreateSocketError as e:
-                report_diagnostic_event(
-                    "Failed to create bound netlink socket: %s" % e,
-                    logger_func=LOG.warning,
-                )
-                raise sources.InvalidMetaDataException(
-                    "Failed to report ready while in provisioning pool."
-                ) from e
-            except NoDHCPLeaseError as e:
-                report_diagnostic_event(
-                    "DHCP failed while in provisioning pool",
-                    logger_func=LOG.warning,
-                )
-                raise sources.InvalidMetaDataException(
-                    "Failed to report ready while in provisioning pool."
-                ) from e
-            finally:
-                if nl_sock:
-                    nl_sock.close()
-
-            # Teardown old network configuration.
-            self._teardown_ephemeral_networking()
 
         while not reprovision_data:
             if not self._is_ephemeral_networking_up():
