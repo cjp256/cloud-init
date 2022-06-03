@@ -28,6 +28,7 @@ distros = [
     "debian",
     "eurolinux",
     "fedora",
+    "mariner",
     "miraclelinux",
     "openEuler",
     "opensuse",
@@ -90,6 +91,16 @@ DISTRO_CLIENT_CONFIG = {
     "debian": {
         "chrony": {
             "confpath": "/etc/chrony/chrony.conf",
+        },
+    },
+    "mariner": {
+        "chrony": {
+            "service_name": "chronyd",
+        },
+        "ntp": {"service_name": "ntpd", "confpath": "/etc/ntp.conf"},
+        "systemd-timesyncd": {
+            "check_exe": "/usr/lib/systemd/systemd-timesyncd",
+            "confpath": "/etc/systemd/timesyncd.conf",
         },
     },
     "opensuse": {

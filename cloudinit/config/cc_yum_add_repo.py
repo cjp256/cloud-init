@@ -28,6 +28,7 @@ distros = [
     "cloudlinux",
     "eurolinux",
     "fedora",
+    "mariner",
     "openEuler",
     "photon",
     "rhel",

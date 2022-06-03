@@ -259,7 +259,8 @@ class TestCLI(test_helpers.FilesystemMockingTestCase):
             expected_doc_sections = [
                 "**Supported distros:** all",
                 "**Supported distros:** almalinux, alpine, centos, "
-                "cloudlinux, debian, eurolinux, fedora, miraclelinux, "
+                "cloudlinux, debian, eurolinux, fedora, "
+                "mariner, miraclelinux, "
                 "openEuler, opensuse, photon, rhel, rocky, sles, ubuntu, "
                 "virtuozzo",
                 "**Config schema**:\n    **resize_rootfs:** "

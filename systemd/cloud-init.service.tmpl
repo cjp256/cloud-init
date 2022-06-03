@@ -1,7 +1,7 @@
 ## template:jinja
 [Unit]
 Description=Initial cloud-init job (metadata service crawler)
-{% if variant not in ["photon", "rhel"] %}
+{% if variant not in ["mariner", "photon", "rhel"] %}
 DefaultDependencies=no
 {% endif %}
 Wants=cloud-init-local.service

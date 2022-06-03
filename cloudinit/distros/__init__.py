@@ -45,6 +45,7 @@ OSFAMILIES = {
         "cloudlinux",
         "eurolinux",
         "fedora",
+        "mariner",
         "miraclelinux",
         "openEuler",
         "photon",

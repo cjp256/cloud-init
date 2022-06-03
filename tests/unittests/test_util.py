@@ -321,6 +321,19 @@ OS_RELEASE_PHOTON = """\
         BUG_REPORT_URL="https://github.com/vmware/photon/issues"
 """
 
+OS_RELEASE_MARINER = dedent(
+    """\
+    NAME="CBL-Mariner"
+    VERSION="2.0"
+    ID=mariner
+    VERSION_ID=2.0
+    PRETTY_NAME="CBL-Mariner/Linux"
+    ANSI_COLOR="1;34"
+    HOME_URL="https://github.com/microsoft/CBL-Mariner"
+    BUG_REPORT_URL="https://github.com/microsoft/CBL-Mariner/issues"
+"""
+)
+
 
 class FakeCloud(object):
     def __init__(self, hostname, fqdn):
@@ -1026,6 +1039,14 @@ class TestGetLinuxDistro(CiTestCase):
         m_path_exists.side_effect = TestGetLinuxDistro.os_release_exists
         dist = util.get_linux_distro()
         self.assertEqual(("photon", "4.0", "VMware Photon OS/Linux"), dist)
+
+    @mock.patch("cloudinit.util.load_file")
+    def test_get_linux_mariner_os_release(self, m_os_release, m_path_exists):
+        """Verify we get the correct name and machine arch on MarinerOS"""
+        m_os_release.return_value = OS_RELEASE_MARINER
+        m_path_exists.side_effect = TestGetLinuxDistro.os_release_exists
+        dist = util.get_linux_distro()
+        self.assertEqual(("mariner", "2.0", ""), dist)
 
     @mock.patch("platform.system")
     @mock.patch("platform.dist", create=True)
