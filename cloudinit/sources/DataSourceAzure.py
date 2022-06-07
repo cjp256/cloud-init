@@ -58,8 +58,6 @@ DEFAULT_METADATA = {"instance-id": "iid-AZURE-NODE"}
 # ensures that it gets linked to this path.
 RESOURCE_DISK_PATH = "/dev/disk/cloud/azure_resource"
 DEFAULT_FS = "ext4"
-# DMI chassis-asset-tag is set static for all azure instances
-AZURE_CHASSIS_ASSET_TAG = "7783-7084-3265-9085-8269-3286-77"
 REPORTED_READY_MARKER_FILE = "/var/lib/cloud/data/reported_ready"
 AGENT_SEED_DIR = "/var/lib/waagent"
 DEFAULT_PROVISIONING_ISO_DEV = "/dev/sr0"
@@ -95,6 +93,10 @@ class PPSType(Enum):
     RUNNING = "Running"
     SAVABLE = "Savable"
     UNKNOWN = "Unknown"
+
+
+class ChassisAssetTag(Enum):
+    AZURE_CLOUD = "7783-7084-3265-9085-8269-3286-77"
 
 
 PLATFORM_ENTROPY_SOURCE: Optional[str] = "/sys/firmware/acpi/tables/OEM0"
@@ -666,7 +668,12 @@ class DataSourceAzure(sources.DataSource):
 
     def _is_platform_viable(self):
         """Check platform environment to report if this datasource may run."""
-        return _is_platform_viable(self.seed_dir)
+        chassis_tag = _determine_asset_tag()
+        if chassis_tag is not None:
+            return True
+
+        # If no valid chassis tag, check for seeded ovf-env.xml
+        return os.path.exists(os.path.join(self.seed_dir, "ovf-env.xml"))
 
     def clear_cached_attrs(self, attr_defaults=()):
         """Reset any cached class attributes to defaults."""
@@ -2364,7 +2371,7 @@ def maybe_remove_ubuntu_network_config_scripts(paths=None):
                 util.del_file(path)
 
 
-def _is_platform_viable(seed_dir):
+def _determine_asset_tag() -> Optional[ChassisAssetTag]:
     """Check platform environment to report if this datasource may run."""
     with events.ReportEventStack(
         name="check-platform-viability",
@@ -2372,14 +2379,13 @@ def _is_platform_viable(seed_dir):
         parent=azure_ds_reporter,
     ) as evt:
         asset_tag = dmi.read_dmi_data("chassis-asset-tag")
-        if asset_tag == AZURE_CHASSIS_ASSET_TAG:
-            return True
-        msg = "Non-Azure DMI asset tag '%s' discovered." % asset_tag
-        evt.description = msg
-        report_diagnostic_event(msg, logger_func=LOG.debug)
-        if os.path.exists(os.path.join(seed_dir, "ovf-env.xml")):
-            return True
-        return False
+        try:
+            return ChassisAssetTag(asset_tag)
+        except ValueError:
+            msg = "Non-Azure DMI asset tag '%s' discovered." % asset_tag
+            evt.description = msg
+            report_diagnostic_event(msg, logger_func=LOG.debug)
+            return None
 
 
 class BrokenAzureDataSource(Exception):

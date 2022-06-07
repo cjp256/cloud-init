@@ -44,10 +44,9 @@ MOCKPATH = "cloudinit.sources.DataSourceAzure."
 
 
 @pytest.fixture
-def azure_ds(patched_data_dir_path, paths):
+def azure_ds(patched_data_dir_path, mock_dmi_read_dmi_data, paths):
     """Provide DataSourceAzure instance with mocks for minimal test case."""
-    with mock.patch(MOCKPATH + "_is_platform_viable", return_value=True):
-        yield dsaz.DataSourceAzure(sys_cfg={}, distro=mock.Mock(), paths=paths)
+    yield dsaz.DataSourceAzure(sys_cfg={}, distro=mock.Mock(), paths=paths)
 
 
 @pytest.fixture
@@ -119,6 +118,8 @@ def mock_dmi_read_dmi_data():
     def fake_read(key: str) -> str:
         if key == "system-uuid":
             return "fake-system-uuid"
+        elif key == "chassis-asset-tag":
+            return "7783-7084-3265-9085-8269-3286-77"
         raise RuntimeError()
 
     with mock.patch(
@@ -970,7 +971,6 @@ scbus-1 on xpt0 bus 0
 
         dsaz.BUILTIN_DS_CONFIG["data_dir"] = self.waagent_d
 
-        self.m_is_platform_viable = mock.MagicMock(autospec=True)
         self.m_get_metadata_from_fabric = mock.MagicMock(return_value=[])
         self.m_report_failure_to_fabric = mock.MagicMock(autospec=True)
         self.m_get_interfaces = mock.MagicMock(
@@ -994,6 +994,10 @@ scbus-1 on xpt0 bus 0
                 return self.instance_id
             elif key == "chassis-asset-tag":
                 return "7783-7084-3265-9085-8269-3286-77"
+            raise RuntimeError()
+
+        self.m_read_dmi_data = mock.MagicMock(autospec=True)
+        self.m_read_dmi_data.side_effect = _dmi_mocks
 
         self.apply_patches(
             [
@@ -1002,7 +1006,6 @@ scbus-1 on xpt0 bus 0
                     "list_possible_azure_ds",
                     self.m_list_possible_azure_ds,
                 ),
-                (dsaz, "_is_platform_viable", self.m_is_platform_viable),
                 (
                     dsaz,
                     "get_metadata_from_fabric",
@@ -1029,7 +1032,7 @@ scbus-1 on xpt0 bus 0
                 (
                     dsaz.dmi,
                     "read_dmi_data",
-                    mock.MagicMock(side_effect=_dmi_mocks),
+                    self.m_read_dmi_data,
                 ),
                 (
                     dsaz.util,
@@ -1099,14 +1102,16 @@ scbus-1 on xpt0 bus 0
         # Return a non-matching asset tag value
         data = {}
         dsrc = self._get_ds(data)
-        self.m_is_platform_viable.return_value = False
+        self.m_read_dmi_data.side_effect = lambda x: "notazure"
         with mock.patch.object(
             dsrc, "crawl_metadata"
         ) as m_crawl_metadata, mock.patch.object(
             dsrc, "_report_failure"
         ) as m_report_failure:
             ret = dsrc.get_data()
-            self.m_is_platform_viable.assert_called_with(dsrc.seed_dir)
+            assert self.m_read_dmi_data.mock_calls == [
+                mock.call("chassis-asset-tag")
+            ]
             self.assertFalse(ret)
             # Assert that for non viable platforms,
             # there is no communication with the Azure datasource.
@@ -1123,27 +1128,22 @@ scbus-1 on xpt0 bus 0
         data = {}
         dsrc = self._get_ds(data)
         with mock.patch.object(dsrc, "_report_failure") as m_report_failure:
-            self.m_is_platform_viable.return_value = True
             ret = dsrc.get_data()
-            self.m_is_platform_viable.assert_called_with(dsrc.seed_dir)
             self.assertFalse(ret)
             self.assertEqual(1, m_report_failure.call_count)
 
     def test_crawl_metadata_exception_returns_no_datasource(self):
         data = {}
         dsrc = self._get_ds(data)
-        self.m_is_platform_viable.return_value = True
         with mock.patch.object(dsrc, "crawl_metadata") as m_crawl_metadata:
             m_crawl_metadata.side_effect = Exception
             ret = dsrc.get_data()
-            self.m_is_platform_viable.assert_called_with(dsrc.seed_dir)
             self.assertEqual(1, m_crawl_metadata.call_count)
             self.assertFalse(ret)
 
     def test_crawl_metadata_exception_should_report_failure_with_msg(self):
         data = {}
         dsrc = self._get_ds(data)
-        self.m_is_platform_viable.return_value = True
         with mock.patch.object(
             dsrc, "crawl_metadata"
         ) as m_crawl_metadata, mock.patch.object(
@@ -1159,7 +1159,6 @@ scbus-1 on xpt0 bus 0
     def test_crawl_metadata_exc_should_log_could_not_crawl_msg(self):
         data = {}
         dsrc = self._get_ds(data)
-        self.m_is_platform_viable.return_value = True
         with mock.patch.object(dsrc, "crawl_metadata") as m_crawl_metadata:
             m_crawl_metadata.side_effect = Exception
             dsrc.get_data()
@@ -3479,27 +3478,33 @@ class TestRemoveUbuntuNetworkConfigScripts(CiTestCase):
             self.assertIn(mock.call(path), calls)
 
 
-class TestWBIsPlatformViable(CiTestCase):
-    """White box tests for _is_platform_viable."""
+class IsPlatformViable:
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            dsaz.ChassisAssetTag.AZURE_CLOUD.value,
+        ],
+    )
+    def test_true_on_azure_chassis(
+        self, azure_ds, mock_dmi_read_dmi_data, tag
+    ):
+        mock_dmi_read_dmi_data.return_value = tag
 
-    with_logs = True
+        assert azure_ds._is_platform_viable("doesnotmatter") is True
 
-    @mock.patch(MOCKPATH + "dmi.read_dmi_data")
-    def test_true_on_non_azure_chassis(self, m_read_dmi_data):
-        """Return True if DMI chassis-asset-tag is AZURE_CHASSIS_ASSET_TAG."""
-        m_read_dmi_data.return_value = dsaz.AZURE_CHASSIS_ASSET_TAG
-        self.assertTrue(dsaz._is_platform_viable("doesnotmatter"))
+    def test_true_on_azure_ovf_env_in_seed_dir(
+        self, azure_ds, mock_dmi_read_dmi_data, tmpdir
+    ):
+        seed_dir_path = Path(tmpdir) / "seed_dir"
+        seed_dir_path.mkdir()
+        (seed_dir_path / "ovf-env.xml").write_text("")
+        seed_dir = str(seed_dir_path)
 
-    @mock.patch(MOCKPATH + "os.path.exists")
-    @mock.patch(MOCKPATH + "dmi.read_dmi_data")
-    def test_true_on_azure_ovf_env_in_seed_dir(self, m_read_dmi_data, m_exist):
-        """Return True if ovf-env.xml exists in known seed dirs."""
-        # Non-matching Azure chassis-asset-tag
-        m_read_dmi_data.return_value = dsaz.AZURE_CHASSIS_ASSET_TAG + "X"
+        mock_dmi_read_dmi_data.return_value = "not-azure-chassis-tag"
+        mock_os_path_isfile.return_value = True
 
-        m_exist.return_value = True
-        self.assertTrue(dsaz._is_platform_viable("/some/seed/dir"))
-        m_exist.called_once_with("/other/seed/dir")
+        assert azure_ds._is_platform_viable(seed_dir) is True
+        assert mock_os_path_isfile.mock_calls == [mock.call(seed_dir)]
 
     def test_false_on_no_matching_azure_criteria(self):
         """Report non-azure on unmatched asset tag, ovf-env absent and no dev.
@@ -4037,7 +4042,8 @@ class TestProvisioning:
 
         # Verify DMI usage.
         assert self.mock_dmi_read_dmi_data.mock_calls == [
-            mock.call("system-uuid")
+            mock.call("chassis-asset-tag"),
+            mock.call("system-uuid"),
         ]
         assert self.azure_ds.metadata["instance-id"] == "fake-system-uuid"
 
@@ -4117,7 +4123,8 @@ class TestProvisioning:
 
         # Verify DMI usage.
         assert self.mock_dmi_read_dmi_data.mock_calls == [
-            mock.call("system-uuid")
+            mock.call("chassis-asset-tag"),
+            mock.call("system-uuid"),
         ]
         assert self.azure_ds.metadata["instance-id"] == "fake-system-uuid"
 
@@ -4223,7 +4230,8 @@ class TestProvisioning:
 
         # Verify DMI usage.
         assert self.mock_dmi_read_dmi_data.mock_calls == [
-            mock.call("system-uuid")
+            mock.call("chassis-asset-tag"),
+            mock.call("system-uuid"),
         ]
         assert self.azure_ds.metadata["instance-id"] == "fake-system-uuid"
 
