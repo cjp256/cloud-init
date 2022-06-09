@@ -323,6 +323,7 @@ def construct_ovf_env(
     password=None,
     public_keys=None,
     disable_ssh_password_auth=None,
+    disable_wireserver=None,
     preprovisioned_vm=None,
     preprovisioned_vm_type=None,
 ):
@@ -357,6 +358,11 @@ def construct_ovf_env(
             "<ns1:DisableSshPasswordAuthentication>%s"
             % str(disable_ssh_password_auth).lower()
             + "</ns1:DisableSshPasswordAuthentication>"
+        )
+    if disable_wireserver is not None:
+        content.append(
+            "<ns1:DisableWireserver>%s" % str(disable_wireserver).lower()
+            + "</ns1:DisableWireserver>"
         )
     if public_keys is not None:
         content += ["<ns1:SSH>", "<ns1:PublicKeys>"]
