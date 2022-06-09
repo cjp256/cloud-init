@@ -1109,6 +1109,7 @@ class OvfEnvXml:
         password: Optional[str] = None,
         hostname: Optional[str] = None,
         custom_data: Optional[bytes] = None,
+        disable_imds: Optional[bool] = None,
         disable_ssh_password_auth: Optional[bool] = None,
         disable_wireserver: Optional[bool] = None,
         network: Optional[dict] = None,
@@ -1121,6 +1122,7 @@ class OvfEnvXml:
         self.hostname = hostname
         self.custom_data = custom_data
         self.network = network
+        self.disable_imds = disable_imds
         self.disable_ssh_password_auth = disable_ssh_password_auth
         self.disable_wireserver = disable_wireserver
         self.public_keys: List[dict] = public_keys or []
@@ -1260,6 +1262,12 @@ class OvfEnvXml:
         )
         self.hostname = self._parse_property(
             config_set, "HostName", required=True
+        )
+        self.disable_imds = self._parse_property(
+            config_set,
+            "DisableIMDS",
+            parse_bool=True,
+            required=False,
         )
         self.disable_ssh_password_auth = self._parse_property(
             config_set,
