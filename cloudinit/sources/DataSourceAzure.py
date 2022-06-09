@@ -2167,19 +2167,29 @@ def generate_network_config_from_instance_network_metadata(
     """
     netconfig: Dict[str, Any] = {"version": 2, "ethernets": {}}
     for idx, intf in enumerate(network_metadata["interface"]):
+        dev_config: Dict[str, Any] = {}
         has_ip_address = False
         # First IPv4 and/or IPv6 address will be obtained via DHCP.
         # Any additional IPs of each type will be set as static
         # addresses.
         nicname = "eth{idx}".format(idx=idx)
-        dhcp_override = {"route-metric": (idx + 1) * 100}
-        dev_config: Dict[str, Any] = {
-            "dhcp4": True,
-            "dhcp4-overrides": dhcp_override,
-            "dhcp6": False,
-        }
+
+        dhcp4 = intf.get("dhcp4", True)
+        dev_config["dhcp4"] = dhcp4
+        if dhcp4:
+            dhcp_override = {"route-metric": (idx + 1) * 100}
+            dev_config["dhcp4-overrides"] = dhcp_override
+
+        dhcp6 = intf.get("dhcp6", None)
+        if dhcp6 is None:
+            # False unless IPv6 is configured.
+            dev_config["dhcp6"] = False
+        else:
+            dev_config["dhcp6"] = dhcp6
+
         for addr_type in ("ipv4", "ipv6"):
-            addresses = intf.get(addr_type, {}).get("ipAddress", [])
+            ip_config = intf.get(addr_type, {})
+            addresses = ip_config.get("ipAddress", [])
             # If there are no available IP addresses, then we don't
             # want to add this interface to the generated config.
             if not addresses:
@@ -2191,11 +2201,13 @@ def generate_network_config_from_instance_network_metadata(
             else:
                 default_prefix = "128"
                 if addresses:
-                    dev_config["dhcp6"] = True
-                    # non-primary interfaces should have a higher
-                    # route-metric (cost) so default routes prefer
-                    # primary nic due to lower route-metric value
-                    dev_config["dhcp6-overrides"] = dhcp_override
+                    # Enable dhcp6 if not explicitly disabled.
+                    if dhcp6 is not False:
+                        dev_config["dhcp6"] = True
+                        # non-primary interfaces should have a higher
+                        # route-metric (cost) so default routes prefer
+                        # primary nic due to lower route-metric value
+                        dev_config["dhcp6-overrides"] = dhcp_override
             for addr in addresses[1:]:
                 # Append static address config for ip > 1
                 netPrefix = intf[addr_type]["subnet"][0].get(
@@ -2207,6 +2219,26 @@ def generate_network_config_from_instance_network_metadata(
                 dev_config["addresses"].append(
                     "{ip}/{prefix}".format(ip=privateIp, prefix=netPrefix)
                 )
+
+        dns = intf.get("dns", {})
+        if dns:
+            dev_config["nameservers"] = {}
+            addresses = dns.get("addresses", [])
+            if addresses:
+                dev_config["nameservers"]["addresses"] = addresses
+
+            searches = dns.get("search", [])
+            if searches:
+                dev_config["nameservers"]["search"] = searches
+
+        gateway4 = intf.get("gateway4", None)
+        if gateway4:
+            dev_config["gateway4"] = gateway4
+
+        gateway6 = intf.get("gateway6", None)
+        if gateway6:
+            dev_config["gateway6"] = gateway6
+
         if dev_config and has_ip_address:
             mac = normalize_mac_address(intf["macAddress"])
             dev_config.update(
