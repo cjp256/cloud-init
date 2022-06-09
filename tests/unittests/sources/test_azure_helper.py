@@ -1573,6 +1573,15 @@ class TestOvfEnvXml:
                     disable_ssh_password_auth=True,
                 ),
             ),
+            # Disable wireserver.
+            (
+                construct_ovf_env(disable_wireserver=True),
+                azure_helper.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    disable_wireserver=True,
+                ),
+            ),
             # Preprovisioned vm.
             (
                 construct_ovf_env(preprovisioned_vm=False),

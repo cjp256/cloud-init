@@ -1110,6 +1110,7 @@ class OvfEnvXml:
         hostname: Optional[str] = None,
         custom_data: Optional[bytes] = None,
         disable_ssh_password_auth: Optional[bool] = None,
+        disable_wireserver: Optional[bool] = None,
         network: Optional[dict] = None,
         public_keys: Optional[List[dict]] = None,
         preprovisioned_vm: bool = False,
@@ -1121,6 +1122,7 @@ class OvfEnvXml:
         self.custom_data = custom_data
         self.network = network
         self.disable_ssh_password_auth = disable_ssh_password_auth
+        self.disable_wireserver = disable_wireserver
         self.public_keys: List[dict] = public_keys or []
         self.preprovisioned_vm = preprovisioned_vm
         self.preprovisioned_vm_type = preprovisioned_vm_type
@@ -1265,7 +1267,12 @@ class OvfEnvXml:
             parse_bool=True,
             required=False,
         )
-
+        self.disable_wireserver = self._parse_property(
+            config_set,
+            "DisableWireserver",
+            parse_bool=True,
+            required=False,
+        )
         self._parse_ssh_section(config_set)
 
     def _parse_platform_settings_section(self, root):
