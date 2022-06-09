@@ -1583,6 +1583,15 @@ class TestOvfEnvXml:
                     custom_data=b"foo",
                 ),
             ),
+            # Network.
+            (
+                construct_ovf_env(network={"foo": "bar"}),
+                azure_helper.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    network={"foo": "bar"},
+                ),
+            ),
             # Disable ssh password auth.
             (
                 construct_ovf_env(disable_ssh_password_auth=True),
@@ -1699,6 +1708,68 @@ class TestOvfEnvXml:
             str(exc_info.value)
             == "Multiple configuration matches in ovf-exml.xml "
             "for 'HostName' (2)"
+        )
+
+    def test_json_parse_failure(self):
+        ovf = """\
+            <ns0:Environment xmlns="http://schemas.dmtf.org/ovf/environment/1"
+             xmlns:ns0="http://schemas.dmtf.org/ovf/environment/1"
+             xmlns:ns1="http://schemas.microsoft.com/windowsazure"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <ns1:ProvisioningSection>
+            <ns1:LinuxProvisioningConfigurationSet>
+            <ns1:ConfigurationSetType>
+            LinuxProvisioningConfiguration
+            </ns1:ConfigurationSetType>
+            <ns1:HostName>test-host2</ns1:HostName>
+            <ns1:UserName>test-user</ns1:UserName>
+            <ns1:Network>ZmFpbAo=</ns1:Network>
+            </ns1:LinuxProvisioningConfigurationSet>
+            </ns1:ProvisioningSection>
+            <ns1:PlatformSettingsSection>
+            <ns1:Version>1.0</ns1:Version>
+            <ns1:PlatformSettings>
+            </ns1:PlatformSettings>
+            </ns1:PlatformSettingsSection>
+            </ns0:Environment>"""
+
+        with pytest.raises(azure_helper.BrokenAzureDataSource) as exc_info:
+            azure_helper.OvfEnvXml.parse_text(ovf)
+
+        assert (
+            str(exc_info.value)
+            == "Failed to parse ovf-env.xml property 'Network' as JSON"
+        )
+
+    def test_base64_decode_failure(self):
+        ovf = """\
+            <ns0:Environment xmlns="http://schemas.dmtf.org/ovf/environment/1"
+             xmlns:ns0="http://schemas.dmtf.org/ovf/environment/1"
+             xmlns:ns1="http://schemas.microsoft.com/windowsazure"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <ns1:ProvisioningSection>
+            <ns1:LinuxProvisioningConfigurationSet>
+            <ns1:ConfigurationSetType>
+            LinuxProvisioningConfiguration
+            </ns1:ConfigurationSetType>
+            <ns1:HostName>test-host2</ns1:HostName>
+            <ns1:UserName>test-user</ns1:UserName>
+            <ns1:CustomData>foo</ns1:CustomData>
+            </ns1:LinuxProvisioningConfigurationSet>
+            </ns1:ProvisioningSection>
+            <ns1:PlatformSettingsSection>
+            <ns1:Version>1.0</ns1:Version>
+            <ns1:PlatformSettings>
+            </ns1:PlatformSettings>
+            </ns1:PlatformSettingsSection>
+            </ns0:Environment>"""
+
+        with pytest.raises(azure_helper.BrokenAzureDataSource) as exc_info:
+            azure_helper.OvfEnvXml.parse_text(ovf)
+
+        assert (
+            str(exc_info.value)
+            == "Failed to parse ovf-env.xml property 'CustomData' as base64"
         )
 
     def test_non_azure_ovf(self):

@@ -345,6 +345,7 @@ class DataSourceAzure(sources.DataSource):
         )
         self._iso_dev = None
         self._network_config = None
+        self._ovf_network_config = None
         self._ephemeral_dhcp_ctx = None
         self._wireserver_endpoint = DEFAULT_WIRESERVER_ENDPOINT
         self._reported_ready_marker_file = os.path.join(
@@ -356,6 +357,7 @@ class DataSourceAzure(sources.DataSource):
 
         self._ephemeral_dhcp_ctx = None
         self._iso_dev = None
+        self._ovf_network_config = None
         self._wireserver_endpoint = DEFAULT_WIRESERVER_ENDPOINT
         self._reported_ready_marker_file = os.path.join(
             self.paths.cloud_dir, "data", "reported_ready"
@@ -550,6 +552,8 @@ class DataSourceAzure(sources.DataSource):
             "Found provisioning metadata in %s" % metadata_source,
             logger_func=LOG.debug,
         )
+
+        self._ovf_network_config = cfg.pop("_network", None)
 
         # If we read OVF from attached media, we are provisioning.  If OVF
         # is not found, we are probably provisioning on a system which does
@@ -1537,22 +1541,35 @@ class DataSourceAzure(sources.DataSource):
     @azure_ds_telemetry_reporter
     def _generate_network_config(self):
         """Generate network configuration according to configuration."""
-        # Use IMDS network metadata, if configured.
-        if (
-            self._metadata_imds
-            and self._metadata_imds != sources.UNSET
-            and self.ds_cfg.get("apply_network_config")
-        ):
-            try:
-                return generate_network_config_from_instance_network_metadata(
-                    self._metadata_imds["network"]
-                )
-            except Exception as e:
-                LOG.error(
-                    "Failed generating network config "
-                    "from IMDS network metadata: %s",
-                    str(e),
-                )
+        # Use IMDS network metadata, if configured.  Prioritize metadata
+        # from IMDS, then OVF configuration, if any.
+        if self.ds_cfg.get("apply_network_config"):
+            network_config = None
+            if (
+                self._metadata_imds
+                and self._metadata_imds != sources.UNSET
+                and "network" in self._metadata_imds
+            ):
+                network_config = self._metadata_imds["network"]
+            elif (
+                self._ovf_network_config
+                and self._ovf_network_config != sources.UNSET
+            ):
+                network_config = self._ovf_network_config
+
+            if network_config:
+                try:
+                    return (
+                        generate_network_config_from_instance_network_metadata(
+                            network_config
+                        )
+                    )
+                except Exception as e:
+                    LOG.error(
+                        "Failed generating network config "
+                        "from IMDS network metadata: %s",
+                        str(e),
+                    )
 
         # Generate fallback configuration.
         try:
@@ -1897,6 +1914,9 @@ def read_azure_ovf(contents):
         cfg["ssh_pwauth"] = not ovf_env.disable_ssh_password_auth
     elif ovf_env.password:
         cfg["ssh_pwauth"] = True
+
+    if ovf_env.network:
+        cfg["_network"] = ovf_env.network
 
     defuser = {}
     if ovf_env.username:
