@@ -1592,6 +1592,15 @@ class TestOvfEnvXml:
                     network={"foo": "bar"},
                 ),
             ),
+            # Disable IMDS.
+            (
+                construct_ovf_env(disable_imds=True),
+                azure_helper.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    disable_imds=True,
+                ),
+            ),
             # Disable ssh password auth.
             (
                 construct_ovf_env(disable_ssh_password_auth=True),
