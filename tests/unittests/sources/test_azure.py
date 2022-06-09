@@ -3483,6 +3483,7 @@ class IsPlatformViable:
         "tag",
         [
             dsaz.ChassisAssetTag.AZURE_CLOUD.value,
+            dsaz.ChassisAssetTag.AZURE_STACK_Z.value,
         ],
     )
     def test_true_on_azure_chassis(
