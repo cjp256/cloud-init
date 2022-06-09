@@ -4546,6 +4546,84 @@ class TestProvisioning:
         # Verify no netlink operations for recovering PPS.
         assert self.mock_netlink.mock_calls == []
 
+    def test_no_pps_without_dhcp_imds_wireserver(self):
+        network_config = {
+            "interface": [
+                {
+                    "dns": {
+                        "search": ["mycorp"],
+                        "addresses": ["1.1.1.1", "8.8.8.8"],
+                    },
+                    "macAddress": "000D3A047598",
+                    "ipv6": {"dhcp": False, "ipAddress": []},
+                    "ipv4": {
+                        "dhcp": False,
+                        "subnet": [{"prefix": "24", "address": "10.0.0.0"}],
+                        "gateway": "10.0.0.1",
+                        "ipAddress": [
+                            {
+                                "privateIpAddress": "10.0.0.4",
+                                "publicIpAddress": "104.46.124.81",
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+        ovf = construct_ovf_env(
+            disable_wireserver=True, disable_imds=True, network=network_config
+        )
+
+        seed_path = Path(self.azure_ds.paths.seed_dir, "azure")
+        seed_path.mkdir(parents=True)
+        ovf_path = Path(self.azure_ds.paths.seed_dir, "azure", "ovf-env.xml")
+        ovf_path.write_text(ovf)
+
+        self.azure_ds._get_data()
+
+        assert self.mock_readurl.mock_calls == []
+
+        # Verify DHCP is never setup.
+        assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == []
+        assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == []
+        assert self.azure_ds._is_ephemeral_networking_up() is False
+
+        # Verify DMI usage.
+        assert self.mock_dmi_read_dmi_data.mock_calls == [
+            mock.call("chassis-asset-tag"),
+            mock.call("system-uuid"),
+        ]
+        assert self.azure_ds.metadata["instance-id"] == "fake-system-uuid"
+
+        # Verify IMDS metadata.
+        assert self.azure_ds.metadata["imds"] == {}
+
+        # Verify reporting ready never happens.
+        assert self.mock_azure_get_metadata_from_fabric.mock_calls == []
+
+        # Verify netlink.
+        assert self.mock_netlink.mock_calls == []
+
+        assert self.azure_ds.network_config == {
+            "version": 2,
+            "ethernets": {
+                "eth0": {
+                    "dhcp4": False,
+                    "dhcp6": False,
+                    "nameservers": {
+                        "addresses": ["1.1.1.1", "8.8.8.8"],
+                        "search": ["mycorp"],
+                    },
+                    "gateway4": "10.0.0.1",
+                    "match": {
+                        "macaddress": "00:0d:3a:04:75:98",
+                        "driver": "hv_netvsc",
+                    },
+                    "set-name": "eth0",
+                }
+            },
+        }
+
 
 class TestValidateIMDSMetadata:
     @pytest.mark.parametrize(

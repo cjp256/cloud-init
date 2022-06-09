@@ -560,12 +560,18 @@ class DataSourceAzure(sources.DataSource):
         # not have UDF support.  In either case, require IMDS metadata.
         # If we require IMDS metadata, try harder to obtain networking, waiting
         # for at least 20 minutes.  Otherwise only wait 5 minutes.
-        requires_imds_metadata = bool(self._iso_dev) or not ovf_is_accessible
-        timeout_minutes = 20 if requires_imds_metadata else 5
-        try:
-            self._setup_ephemeral_networking(timeout_minutes=timeout_minutes)
-        except NoDHCPLeaseError:
-            pass
+        # No need for networking if IMDS and Wireserver are disabled.
+        if not self._disable_imds or not self._disable_wireserver:
+            requires_imds_metadata = (
+                bool(self._iso_dev) or not ovf_is_accessible
+            )
+            timeout_minutes = 20 if requires_imds_metadata else 5
+            try:
+                self._setup_ephemeral_networking(
+                    timeout_minutes=timeout_minutes
+                )
+            except NoDHCPLeaseError:
+                pass
 
         if self._is_ephemeral_networking_up() and not self._disable_imds:
             imds_md = self.get_imds_data_with_api_fallback(retries=10)
