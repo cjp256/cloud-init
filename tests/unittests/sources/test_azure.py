@@ -317,6 +317,7 @@ def patched_reported_ready_marker_path(azure_ds, patched_markers_dir_path):
 def construct_ovf_env(
     *,
     custom_data=None,
+    network=None,
     hostname="test-host",
     username="test-user",
     password=None,
@@ -348,6 +349,9 @@ def construct_ovf_env(
         content.append(
             "<ns1:CustomData>%s</ns1:CustomData>" % (b64e(custom_data))
         )
+    if network is not None:
+        network = json.dumps(network)
+        content.append("<ns1:Network>%s</ns1:Network>" % (b64e(network)))
     if disable_ssh_password_auth is not None:
         content.append(
             "<ns1:DisableSshPasswordAuthentication>%s"
