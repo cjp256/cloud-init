@@ -322,6 +322,7 @@ def construct_ovf_env(
     username="test-user",
     password=None,
     public_keys=None,
+    disable_imds=None,
     disable_ssh_password_auth=None,
     disable_wireserver=None,
     preprovisioned_vm=None,
@@ -353,6 +354,11 @@ def construct_ovf_env(
     if network is not None:
         network = json.dumps(network)
         content.append("<ns1:Network>%s</ns1:Network>" % (b64e(network)))
+    if disable_imds is not None:
+        content.append(
+            "<ns1:DisableIMDS>%s" % str(disable_imds).lower()
+            + "</ns1:DisableIMDS>"
+        )
     if disable_ssh_password_auth is not None:
         content.append(
             "<ns1:DisableSshPasswordAuthentication>%s"

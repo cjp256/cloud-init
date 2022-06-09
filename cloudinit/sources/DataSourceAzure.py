@@ -342,6 +342,7 @@ class DataSourceAzure(sources.DataSource):
         self.ds_cfg = util.mergemanydict(
             [util.get_cfg_by_path(sys_cfg, DS_CFG_PATH, {}), BUILTIN_DS_CONFIG]
         )
+        self._disable_imds = False
         self._disable_wireserver = False
         self._iso_dev = None
         self._network_config = None
@@ -355,6 +356,7 @@ class DataSourceAzure(sources.DataSource):
     def _unpickle(self, ci_pkl_version: int) -> None:
         super()._unpickle(ci_pkl_version)
 
+        self._disable_imds = False
         self._disable_wireserver = False
         self._ephemeral_dhcp_ctx = None
         self._iso_dev = None
@@ -549,6 +551,7 @@ class DataSourceAzure(sources.DataSource):
             logger_func=LOG.debug,
         )
 
+        self._disable_imds = cfg.pop("_disable_imds", False)
         self._disable_wireserver = cfg.pop("_disable_wireserver", False)
         self._ovf_network_config = cfg.pop("_network", None)
 
@@ -564,7 +567,7 @@ class DataSourceAzure(sources.DataSource):
         except NoDHCPLeaseError:
             pass
 
-        if self._is_ephemeral_networking_up():
+        if self._is_ephemeral_networking_up() and not self._disable_imds:
             imds_md = self.get_imds_data_with_api_fallback(retries=10)
         else:
             imds_md = {}
@@ -582,8 +585,8 @@ class DataSourceAzure(sources.DataSource):
                 report_diagnostic_event(msg, logger_func=LOG.error)
                 raise sources.InvalidMetaDataException(msg)
 
-            if self._disable_wireserver:
-                msg = "Wireserver required for PPS VMs"
+            if self._disable_wireserver or self._disable_imds:
+                msg = "Wireserver and IMDS are required for PPS VMs"
                 report_diagnostic_event(msg, logger_func=LOG.error)
                 raise sources.InvalidMetaDataException(msg)
 
@@ -1870,11 +1873,14 @@ def read_azure_ovf(contents):
     elif ovf_env.password:
         cfg["ssh_pwauth"] = True
 
-    if ovf_env.network:
-        cfg["_network"] = ovf_env.network
+    if ovf_env.disable_imds:
+        cfg["_disable_imds"] = ovf_env.disable_imds
 
     if ovf_env.disable_wireserver:
         cfg["_disable_wireserver"] = ovf_env.disable_wireserver
+
+    if ovf_env.network:
+        cfg["_network"] = ovf_env.network
 
     defuser = {}
     if ovf_env.username:
