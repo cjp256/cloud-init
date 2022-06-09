@@ -1,5 +1,6 @@
 # This file is part of cloud-init. See LICENSE file for license information.
 import base64
+import binascii
 import enum
 import json
 import logging
@@ -1109,6 +1110,7 @@ class OvfEnvXml:
         hostname: Optional[str] = None,
         custom_data: Optional[bytes] = None,
         disable_ssh_password_auth: Optional[bool] = None,
+        network: Optional[dict] = None,
         public_keys: Optional[List[dict]] = None,
         preprovisioned_vm: bool = False,
         preprovisioned_vm_type: Optional[str] = None,
@@ -1117,6 +1119,7 @@ class OvfEnvXml:
         self.password = password
         self.hostname = hostname
         self.custom_data = custom_data
+        self.network = network
         self.disable_ssh_password_auth = disable_ssh_password_auth
         self.public_keys: List[dict] = public_keys or []
         self.preprovisioned_vm = preprovisioned_vm
@@ -1181,6 +1184,7 @@ class OvfEnvXml:
         required: bool,
         decode_base64: bool = False,
         parse_bool: bool = False,
+        parse_json: bool = False,
         default=None,
     ):
         matches = node.findall("./wa:" + name, OvfEnvXml.NAMESPACES)
@@ -1203,10 +1207,23 @@ class OvfEnvXml:
             value = default
 
         if decode_base64 and value is not None:
-            value = base64.b64decode("".join(value.split()))
+            try:
+                value = base64.b64decode("".join(value.split()))
+            except binascii.Error as e:
+                raise BrokenAzureDataSource(
+                    "Failed to parse ovf-env.xml property %r as base64" % name
+                ) from e
 
         if parse_bool:
             value = util.translate_bool(value)
+
+        if parse_json:
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError) as e:
+                raise BrokenAzureDataSource(
+                    "Failed to parse ovf-env.xml property %r as JSON" % name
+                ) from e
 
         return value
 
@@ -1224,6 +1241,13 @@ class OvfEnvXml:
             config_set,
             "CustomData",
             decode_base64=True,
+            required=False,
+        )
+        self.network = self._parse_property(
+            config_set,
+            "Network",
+            decode_base64=True,
+            parse_json=True,
             required=False,
         )
         self.username = self._parse_property(
