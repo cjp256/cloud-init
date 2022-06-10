@@ -7,6 +7,7 @@
 import base64
 import crypt
 import functools
+import json
 import os
 import os.path
 import re
@@ -537,9 +538,9 @@ class DataSourceAzure(sources.DataSource):
             logger_func=LOG.debug,
         )
 
-        self._ovf_network_config = cfg.pop("_network", None)
-        self._disable_imds = cfg.pop("_disableimds", False)
-        self._disable_wireserver = cfg.pop("_disablewireserver", False)
+        self._ovf_network_config = cfg.pop("Network", None)
+        self._disable_imds = cfg.pop("DisableIMDS", False)
+        self._disable_wireserver = cfg.pop("DisableWireserver", False)
 
         # If we read OVF from attached media, we are provisioning.  If OVF
         # is not found, we are probably provisioning on a system which does
@@ -1997,15 +1998,6 @@ def read_azure_ovf(contents):
             cfg["_pubkeys"] = load_azure_ovf_pubkeys(child)
         elif name == "disablesshpasswordauthentication":
             cfg["ssh_pwauth"] = util.is_false(value)
-        elif name == "network":
-            if attrs.get("encoding") in (None, "base64"):
-                cfg["_network"] = base64.b64decode("".join(value.split()))
-            else:
-                cfg["_network"] = value
-        elif name == "disableimds":
-            cfg["_disableimds"] = util.is_true(value)
-        elif name == "disablewireserver":
-            cfg["_disablewireserver"] = util.is_true(value)
         elif simple:
             if name in md_props:
                 md[name] = value
@@ -2026,31 +2018,41 @@ def read_azure_ovf(contents):
     if "ssh_pwauth" not in cfg and password:
         cfg["ssh_pwauth"] = True
 
-    preprovisioning_cfg = _get_preprovisioning_cfgs(dom)
-    cfg = util.mergemanydict([cfg, preprovisioning_cfg])
+    _parse_ovf_platform_settings(dom, cfg)
 
     return (md, ud, cfg)
 
 
+def _parse_platform_settings_property(
+    platform_settings,
+    name: str,
+    decode_if_specified: bool = False,
+    parse_bool: bool = False,
+    parse_json: bool = False,
+):
+    value = find_child(platform_settings[0], lambda n: n.localName == name)
+    if not value or len(value) == 0 or value[0].firstChild is None:
+        LOG.debug("%s not found", name)
+        return None
+
+    attrs = dict([(k, v) for k, v in value[0].attributes.items()])
+    value = value[0].firstChild.nodeValue
+    if decode_if_specified and attrs.get("encoding") in (None, "base64"):
+        value = base64.b64decode("".join(value.split()))
+
+    if parse_bool:
+        value = util.translate_bool(value)
+    elif parse_json:
+        value = json.loads(value)
+
+    report_diagnostic_event("%s: %s" % (name, value), logger_func=LOG.info)
+    return value
+
+
 @azure_ds_telemetry_reporter
-def _get_preprovisioning_cfgs(dom):
-    """Read the preprovisioning related flags from ovf and populates a dict
-    with the info.
-
-    Two flags are in use today: PreprovisionedVm bool and
-    PreprovisionedVMType enum. In the long term, the PreprovisionedVm bool
-    will be deprecated in favor of PreprovisionedVMType string/enum.
-
-    Only these combinations of values are possible today:
-        - PreprovisionedVm=True and PreprovisionedVMType=Running
-        - PreprovisionedVm=False and PreprovisionedVMType=Savable
-        - PreprovisionedVm is missing and PreprovisionedVMType=Running/Savable
-        - PreprovisionedVm=False and PreprovisionedVMType is missing
-
-    More specifically, this will never happen:
-        - PreprovisionedVm=True and PreprovisionedVMType=Savable
-    """
-    cfg = {"PreprovisionedVm": False, "PreprovisionedVMType": None}
+def _parse_ovf_platform_settings(dom, cfg):
+    cfg["PreprovisionedVm"] = False
+    cfg["PreprovisionedVMType"] = None
 
     platform_settings_section = find_child(
         dom.documentElement, lambda n: n.localName == "PlatformSettingsSection"
@@ -2058,6 +2060,7 @@ def _get_preprovisioning_cfgs(dom):
     if not platform_settings_section or len(platform_settings_section) == 0:
         LOG.debug("PlatformSettingsSection not found")
         return cfg
+
     platform_settings = find_child(
         platform_settings_section[0],
         lambda n: n.localName == "PlatformSettings",
@@ -2066,74 +2069,36 @@ def _get_preprovisioning_cfgs(dom):
         LOG.debug("PlatformSettings not found")
         return cfg
 
-    # Read the PreprovisionedVm bool flag. This should be deprecated when the
-    # platform has removed PreprovisionedVm and only surfaces
-    # PreprovisionedVMType.
-    cfg["PreprovisionedVm"] = _get_preprovisionedvm_cfg_value(
-        platform_settings
-    )
+    for property_name in [
+        "PreprovisionedVm",
+        "DisableIMDS",
+        "DisableWireserver",
+    ]:
+        value = _parse_platform_settings_property(
+            platform_settings, property_name, parse_bool=True
+        )
+        if value is not None:
+            cfg[property_name] = value
 
-    cfg["PreprovisionedVMType"] = _get_preprovisionedvmtype_cfg_value(
-        platform_settings
-    )
+    property_name = "PreprovisionedVMType"
+    value = _parse_platform_settings_property(platform_settings, property_name)
+    if value is not None:
+        cfg[property_name] = value
+
+    try:
+        property_name = "Network"
+        value = _parse_platform_settings_property(
+            platform_settings,
+            property_name,
+            decode_if_specified=True,
+            parse_json=True,
+        )
+        if value is not None:
+            cfg[property_name] = value
+    except Exception as e:
+        LOG.error(e)
+
     return cfg
-
-
-@azure_ds_telemetry_reporter
-def _get_preprovisionedvm_cfg_value(platform_settings):
-    preprovisionedVm = False
-
-    # Read the PreprovisionedVm bool flag. This should be deprecated when the
-    # platform has removed PreprovisionedVm and only surfaces
-    # PreprovisionedVMType.
-    preprovisionedVmVal = find_child(
-        platform_settings[0], lambda n: n.localName == "PreprovisionedVm"
-    )
-    if not preprovisionedVmVal or len(preprovisionedVmVal) == 0:
-        LOG.debug("PreprovisionedVm not found")
-        return preprovisionedVm
-    preprovisionedVm = util.translate_bool(
-        preprovisionedVmVal[0].firstChild.nodeValue
-    )
-
-    report_diagnostic_event(
-        "PreprovisionedVm: %s" % preprovisionedVm, logger_func=LOG.info
-    )
-
-    return preprovisionedVm
-
-
-@azure_ds_telemetry_reporter
-def _get_preprovisionedvmtype_cfg_value(platform_settings):
-    preprovisionedVMType = None
-
-    # Read the PreprovisionedVMType value from the ovf. It can be
-    # 'Running' or 'Savable' or not exist. This enum value is intended to
-    # replace PreprovisionedVm bool flag in the long term.
-    # A Running VM is the same as preprovisioned VMs of today. This is
-    # equivalent to having PreprovisionedVm=True.
-    # A Savable VM is one whose nic is hot-detached immediately after it
-    # reports ready the first time to free up the network resources.
-    # Once assigned to customer, the customer-requested nics are
-    # hot-attached to it and reprovision happens like today.
-    preprovisionedVMTypeVal = find_child(
-        platform_settings[0], lambda n: n.localName == "PreprovisionedVMType"
-    )
-    if (
-        not preprovisionedVMTypeVal
-        or len(preprovisionedVMTypeVal) == 0
-        or preprovisionedVMTypeVal[0].firstChild is None
-    ):
-        LOG.debug("PreprovisionedVMType not found")
-        return preprovisionedVMType
-
-    preprovisionedVMType = preprovisionedVMTypeVal[0].firstChild.nodeValue
-
-    report_diagnostic_event(
-        "PreprovisionedVMType: %s" % preprovisionedVMType, logger_func=LOG.info
-    )
-
-    return preprovisionedVMType
 
 
 def encrypt_pass(password, salt_id="$6$"):

@@ -369,7 +369,14 @@ def construct_valid_ovf_env(
  <GuestAgentPackageName i:nil="true" />"""
     if platform_settings:
         for k, v in platform_settings.items():
-            content += "<%s>%s</%s>\n" % (k, v, k)
+            if isinstance(v, dict):
+                opening_k = " ".join(
+                    [k, *[f'{ak}="{av}"' for ak, av in v["attrs"].items()]]
+                )
+                v = v["value"]
+            else:
+                opening_k = k
+            content += "<%s>%s</%s>\n" % (opening_k, v, k)
         if "PreprovisionedVMType" not in platform_settings:
             content += """<PreprovisionedVMType i:nil="true" />"""
     content += """</PlatformSettings></wa:PlatformSettingsSection>
@@ -4116,6 +4123,70 @@ class TestProvisioning:
 
         # Verify netlink.
         assert self.mock_netlink.mock_calls == []
+
+    def test_no_pps_without_dhcp_imds_wireserver(self):
+        ovf_data = {"HostName": "myhost", "UserName": "myuser"}
+        platform_settings = {
+            "DisableWireserver": "true",
+            "DisableIMDS": "true",
+            "Network": {
+                "attrs": {"encoding": "base64"},
+                "value": "ewogICJpbnRlcmZhY2UiOiBbCiAgICB7CiAgICAgICJkaGNwNCI6IGZhbHNlLAogICAgICAiZGhjcDYiOiBmYWxzZSwKICAgICAgImRucyI6IHsKICAgICAgICAic2VhcmNoIjogWyJteWNvcnAiXSwKICAgICAgICAiYWRkcmVzc2VzIjogWyIxLjEuMS4xIiwgIjguOC44LjgiXQogICAgICB9LAogICAgICAiZ2F0ZXdheTQiOiAiMTAuMC4wLjEiLAogICAgICAiaXB2NCI6IHsKICAgICAgICAiaXBBZGRyZXNzIjogWwogICAgICAgICAgewogICAgICAgICAgICAicHJpdmF0ZUlwQWRkcmVzcyI6ICIxMC4wLjAuNjAiLAogICAgICAgICAgICAicHVibGljSXBBZGRyZXNzIjogIjIzLjEwMC4zMC4xNTciCiAgICAgICAgICB9CiAgICAgICAgXSwKICAgICAgICAic3VibmV0IjogWwogICAgICAgICAgewogICAgICAgICAgICAiYWRkcmVzcyI6ICIxMC4wLjAuMCIsCiAgICAgICAgICAgICJwcmVmaXgiOiAiMjQiCiAgICAgICAgICB9CiAgICAgICAgXQogICAgICB9LAogICAgICAiaXB2NiI6IHsKICAgICAgICAiaXBBZGRyZXNzIjogW10KICAgICAgfSwKICAgICAgIm1hY0FkZHJlc3MiOiAiMDAwRDNBMTAzQzY3IgogICAgfQogIF0KfQoK",  # noqa: E501
+            },
+        }
+        ovf = construct_valid_ovf_env(
+            data=ovf_data, platform_settings=platform_settings
+        )
+
+        seed_path = Path(self.azure_ds.paths.seed_dir, "azure")
+        seed_path.mkdir(parents=True)
+        ovf_path = Path(self.azure_ds.paths.seed_dir, "azure", "ovf-env.xml")
+        ovf_path.write_text(ovf)
+
+        self.azure_ds._get_data()
+
+        assert self.mock_readurl.mock_calls == []
+
+        # Verify DHCP is never setup.
+        assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == []
+        assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == []
+        assert self.azure_ds._is_ephemeral_networking_up() is False
+
+        # Verify DMI usage.
+        assert self.mock_dmi_read_dmi_data.mock_calls == [
+            mock.call("chassis-asset-tag"),
+            mock.call("system-uuid"),
+        ]
+        assert self.azure_ds.metadata["instance-id"] == "fake-system-uuid"
+
+        # Verify IMDS metadata.
+        assert self.azure_ds.metadata["imds"] == {}
+
+        # Verify reporting ready never happens.
+        assert self.mock_azure_get_metadata_from_fabric.mock_calls == []
+
+        # Verify netlink.
+        assert self.mock_netlink.mock_calls == []
+
+        assert self.azure_ds.network_config == {
+            "version": 2,
+            "ethernets": {
+                "eth0": {
+                    "dhcp4": False,
+                    "dhcp6": False,
+                    "nameservers": {
+                        "addresses": ["1.1.1.1", "8.8.8.8"],
+                        "search": ["mycorp"],
+                    },
+                    "gateway4": "10.0.0.1",
+                    "match": {
+                        "macaddress": "00:0d:3a:10:3c:67",
+                        "driver": "hv_netvsc",
+                    },
+                    "set-name": "eth0",
+                }
+            },
+        }
 
     def test_running_pps(self):
         self.imds_md["extended"]["compute"]["ppsType"] = "Running"
