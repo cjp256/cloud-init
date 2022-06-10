@@ -458,6 +458,7 @@ IMDS_NETWORK_METADATA = {
     ]
 }
 
+
 EXAMPLE_UUID = "d0df4c54-4ecb-4a4b-9954-5bdf3ed5c3b8"
 
 
@@ -619,6 +620,59 @@ class TestNetworkConfig:
             "version": 2,
         }
         azure_ds._metadata_imds = NETWORK_METADATA
+
+        assert azure_ds.network_config == expected
+
+    def test_static_ip_config(self, azure_ds, mock_device_driver):
+        """Network config emits driver when using netvsc."""
+        mock_device_driver.return_value = "hv_netvsc"
+        expected = {
+            "ethernets": {
+                "eth0": {
+                    "dhcp4": False,
+                    "dhcp6": False,
+                    "nameservers": {
+                        "search": ["mycorp"],
+                        "addresses": ["1.1.1.1", "8.8.8.8"],
+                    },
+                    "gateway4": "10.0.0.1",
+                    "match": {
+                        "macaddress": "00:0d:3a:10:3c:67",
+                        "driver": "hv_netvsc",
+                    },
+                    "set-name": "eth0",
+                }
+            },
+            "version": 2,
+        }
+        azure_ds._metadata_imds = {
+            "network": {
+                "interface": [
+                    {
+                        "dhcp4": False,
+                        "dhcp6": False,
+                        "dns": {
+                            "search": ["mycorp"],
+                            "addresses": ["1.1.1.1", "8.8.8.8"],
+                        },
+                        "gateway4": "10.0.0.1",
+                        "ipv4": {
+                            "ipAddress": [
+                                {
+                                    "privateIpAddress": "10.0.0.60",
+                                    "publicIpAddress": "23.100.30.157",
+                                }
+                            ],
+                            "subnet": [
+                                {"address": "10.0.0.0", "prefix": "24"}
+                            ],
+                        },
+                        "ipv6": {"ipAddress": []},
+                        "macAddress": "000D3A103C67",
+                    }
+                ]
+            }
+        }
 
         assert azure_ds.network_config == expected
 
