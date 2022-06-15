@@ -1902,7 +1902,7 @@ def read_azure_ovf(contents):
         raise BrokenAzureDataSource("no child nodes of configuration set")
 
     md_props = "seedfrom"
-    md: Dict[str, Any] = {"azure_data": {}}
+    md: Dict[str, Any] = {}
     cfg = {}
     ud = ""
     password = None
@@ -1949,8 +1949,6 @@ def read_azure_ovf(contents):
         elif simple:
             if name in md_props:
                 md[name] = value
-            else:
-                md["azure_data"][name] = value
 
     defuser = {}
     if username:
