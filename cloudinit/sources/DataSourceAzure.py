@@ -14,7 +14,6 @@ import xml.etree.ElementTree as ET
 from enum import Enum
 from time import sleep, time
 from typing import Any, Dict, List, Optional
-from xml.dom import minidom
 
 import requests
 
@@ -1794,264 +1793,250 @@ def write_files(datadir, files, dirmode=None):
         util.write_file(filename=fname, content=content, mode=0o600)
 
 
-def find_child(node, filter_func):
-    ret = []
-    if not node.hasChildNodes():
-        return ret
-    for child in node.childNodes:
-        if filter_func(child):
-            ret.append(child)
-    return ret
+class OvfEnvXml:
+    OVF_ENV_XML_OVF_NAMESPACE = "http://schemas.dmtf.org/ovf/environment/1"
+    OVF_ENV_XML_WA_NAMESPACE = "http://schemas.microsoft.com/windowsazure"
+    ns = {
+        "ovf": OVF_ENV_XML_OVF_NAMESPACE,
+        "wa": OVF_ENV_XML_WA_NAMESPACE,
+    }
 
+    def __init__(
+        self,
+        *,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        hostname: Optional[str] = None,
+        custom_data: Optional[bytes] = None,
+        disable_ssh_password_auth: Optional[bool] = None,
+        public_keys: Optional[list] = None,
+        preprovisioned_vm: bool = False,
+        preprovisioned_vm_type: Optional[str] = None,
+    ) -> None:
+        self.username = username
+        self.password = password
+        self.hostname = hostname
+        self.custom_data = custom_data
+        self.disable_ssh_password_auth = disable_ssh_password_auth
+        self.public_keys: list = public_keys or []
+        self.preprovisioned_vm = preprovisioned_vm
+        self.preprovisioned_vm_type = preprovisioned_vm_type
 
-@azure_ds_telemetry_reporter
-def load_azure_ovf_pubkeys(sshnode):
-    # This parses a 'SSH' node formatted like below, and returns
-    # an array of dicts.
-    #  [{'fingerprint': '6BE7A7C3C8A8F4B123CCA5D0C2F1BE4CA7B63ED7',
-    #    'path': '/where/to/go'}]
-    #
-    # <SSH><PublicKeys>
-    #   <PublicKey><Fingerprint>ABC</FingerPrint><Path>/x/y/z</Path>
-    #   ...
-    # </PublicKeys></SSH>
-    # Under some circumstances, there may be a <Value> element along with the
-    # Fingerprint and Path. Pass those along if they appear.
-    results = find_child(sshnode, lambda n: n.localName == "PublicKeys")
-    if len(results) == 0:
-        return []
-    if len(results) > 1:
-        raise BrokenAzureDataSource(
-            "Multiple 'PublicKeys'(%s) in SSH node" % len(results)
+    def __eq__(self, other) -> bool:
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self) -> str:
+        props = [
+            "username=%s" % self.username,
+            "password=%s" % self.password,
+            "hostname=%s" % self.hostname,
+            "custom_data=%r" % self.custom_data,
+            "disable_ssh_password_auth=%s" % self.disable_ssh_password_auth,
+            "public_keys=%s" % self.public_keys,
+            "preprovisioned_vm=%s" % self.preprovisioned_vm,
+            "preprovisioned_vm_type=%s" % self.preprovisioned_vm_type,
+        ]
+        return "OvfEnvXml(" + " ".join(props) + ")"
+
+    @classmethod
+    def parse_text(cls, ovf_env_xml: str) -> "OvfEnvXml":
+        """Parser for ovf-env.xml data.
+
+        :raises NonAzureDataSource: if XML is not in Azure's format.
+        :raises BrokenAzureDataSource: if XML is unparseable or invalid.
+        """
+        try:
+            root = ET.fromstring(ovf_env_xml)
+        except Exception as e:
+            error_str = "Invalid ovf-env.xml: %s" % e
+            raise BrokenAzureDataSource(error_str) from e
+
+        # If there's no provisioning section, it's not Azure ovf-env.xml.
+        if not root.find("./wa:ProvisioningSection", cls.ns):
+            raise NonAzureDataSource(
+                "Ignoring non-Azure ovf-env.xml: ProvisioningSection not found"
+            )
+
+        instance = OvfEnvXml()
+        instance._parse_linux_configuration_set_section(root)
+        instance._parse_platform_settings_section(root)
+
+        return instance
+
+    def _find(
+        self,
+        node,
+        name: str,
+        namespace: str = "wa",
+        error_if_missing: bool = True,
+    ):
+        matches = node.findall("./%s:%s" % (namespace, name), self.ns)
+        if len(matches) == 0:
+            msg = "No ovf-env.xml configuration for %r" % name
+            LOG.debug(msg)
+            if error_if_missing:
+                raise BrokenAzureDataSource(msg)
+
+            return None
+
+        if len(matches) > 1:
+            raise BrokenAzureDataSource(
+                "Multiple configuration matches in ovf-exml.xml for %r (%d)"
+                % (name, len(matches))
+            )
+
+        return matches[0]
+
+    def _parse_property(
+        self,
+        node,
+        name: str,
+        decode_base64: bool = False,
+        error_if_missing: bool = False,
+        parse_bool: bool = False,
+        default=None,
+    ):
+        matches = node.findall("./wa:" + name, self.ns)
+        if not matches or len(matches) == 0:
+            msg = "No ovf-env.xml configuration for %r" % name
+            LOG.debug(msg)
+            if error_if_missing:
+                raise BrokenAzureDataSource(msg)
+
+            return default
+
+        elif len(matches) > 1:
+            LOG.debug(
+                "Multiple configurations in ovf-env.xml for property %r (%d)"
+                % (name, len(matches))
+            )
+
+        value = matches[0].text
+
+        # Empty string may be None.
+        if value is None:
+            value = default
+
+        if decode_base64 and value is not None:
+            value = base64.b64decode("".join(value.split()))
+
+        if parse_bool:
+            value = util.translate_bool(value)
+
+        return value
+
+    def _parse_linux_configuration_set_section(self, root):
+        provisioning_section = self._find(root, "ProvisioningSection")
+        config_set = self._find(
+            provisioning_section,
+            "LinuxProvisioningConfigurationSet",
         )
 
-    pubkeys_node = results[0]
-    pubkeys = find_child(pubkeys_node, lambda n: n.localName == "PublicKey")
+        self.custom_data = self._parse_property(
+            config_set, "CustomData", decode_base64=True
+        )
+        self.username = self._parse_property(
+            config_set, "UserName", error_if_missing=True
+        )
+        self.password = self._parse_property(config_set, "UserPassword")
+        self.hostname = self._parse_property(
+            config_set, "HostName", error_if_missing=True
+        )
+        self.disable_ssh_password_auth = self._parse_property(
+            config_set,
+            "DisableSshPasswordAuthentication",
+            parse_bool=True,
+        )
 
-    if len(pubkeys) == 0:
-        return []
+        self._parse_ssh_section(config_set)
 
-    found = []
-    text_node = minidom.Document.TEXT_NODE
+    def _parse_platform_settings_section(self, root):
+        platform_settings_section = self._find(root, "PlatformSettingsSection")
+        platform_settings = self._find(
+            platform_settings_section, "PlatformSettings"
+        )
 
-    for pk_node in pubkeys:
-        if not pk_node.hasChildNodes():
-            continue
+        self.preprovisioned_vm = self._parse_property(
+            platform_settings,
+            "PreprovisionedVm",
+            parse_bool=True,
+            default=False,
+        )
+        self.preprovisioned_vm_type = self._parse_property(
+            platform_settings, "PreprovisionedVMType"
+        )
 
-        cur = {"fingerprint": "", "path": "", "value": ""}
-        for child in pk_node.childNodes:
-            if child.nodeType == text_node or not child.localName:
-                continue
+    def _parse_ssh_section(self, config_set):
+        self.public_keys = []
 
-            name = child.localName.lower()
+        ssh_section = self._find(config_set, "SSH", error_if_missing=False)
+        if ssh_section is None:
+            return
 
-            if name not in cur.keys():
-                continue
+        public_keys_section = self._find(
+            ssh_section, "PublicKeys", error_if_missing=False
+        )
+        if public_keys_section is None:
+            return
 
-            if (
-                len(child.childNodes) != 1
-                or child.childNodes[0].nodeType != text_node
-            ):
-                continue
-
-            cur[name] = child.childNodes[0].wholeText.strip()
-        found.append(cur)
-
-    return found
+        for public_key in public_keys_section.findall(
+            "./wa:PublicKey", self.ns
+        ):
+            fingerprint = self._parse_property(public_key, "Fingerprint")
+            path = self._parse_property(public_key, "Path")
+            value = self._parse_property(public_key, "Value", default="")
+            ssh_key = {
+                "fingerprint": fingerprint,
+                "path": path,
+                "value": value,
+            }
+            self.public_keys.append(ssh_key)
 
 
 @azure_ds_telemetry_reporter
 def read_azure_ovf(contents):
-    try:
-        dom = minidom.parseString(contents)
-    except Exception as e:
-        error_str = "Invalid ovf-env.xml: %s" % e
-        report_diagnostic_event(error_str, logger_func=LOG.warning)
-        raise BrokenAzureDataSource(error_str) from e
-
-    results = find_child(
-        dom.documentElement, lambda n: n.localName == "ProvisioningSection"
-    )
-
-    if len(results) == 0:
-        raise NonAzureDataSource("No ProvisioningSection")
-    if len(results) > 1:
-        raise BrokenAzureDataSource(
-            "found '%d' ProvisioningSection items" % len(results)
-        )
-    provSection = results[0]
-
-    lpcs_nodes = find_child(
-        provSection,
-        lambda n: n.localName == "LinuxProvisioningConfigurationSet",
-    )
-
-    if len(lpcs_nodes) == 0:
-        raise NonAzureDataSource("No LinuxProvisioningConfigurationSet")
-    if len(lpcs_nodes) > 1:
-        raise BrokenAzureDataSource(
-            "found '%d' %ss"
-            % (len(lpcs_nodes), "LinuxProvisioningConfigurationSet")
-        )
-    lpcs = lpcs_nodes[0]
-
-    if not lpcs.hasChildNodes():
-        raise BrokenAzureDataSource("no child nodes of configuration set")
+    ovf_env = OvfEnvXml.parse_text(contents)
+    ud = ovf_env.custom_data or ""
 
     md: Dict[str, Any] = {}
     cfg = {}
-    ud = ""
-    password = None
-    username = None
 
-    for child in lpcs.childNodes:
-        if child.nodeType == dom.TEXT_NODE or not child.localName:
-            continue
+    if ovf_env.hostname:
+        md["local-hostname"] = ovf_env.hostname
 
-        name = child.localName.lower()
+    if ovf_env.public_keys:
+        cfg["_pubkeys"] = ovf_env.public_keys
+    cfg["PreprovisionedVm"] = ovf_env.preprovisioned_vm
+    cfg["PreprovisionedVMType"] = ovf_env.preprovisioned_vm_type
 
-        value = ""
-        if (
-            len(child.childNodes) == 1
-            and child.childNodes[0].nodeType == dom.TEXT_NODE
-        ):
-            value = child.childNodes[0].wholeText
-
-        if name == "customdata":
-            ud = base64.b64decode("".join(value.split()))
-        elif name == "username":
-            username = value
-        elif name == "userpassword":
-            password = value
-        elif name == "hostname":
-            md["local-hostname"] = value
-        elif name == "ssh":
-            cfg["_pubkeys"] = load_azure_ovf_pubkeys(child)
-        elif name == "disablesshpasswordauthentication":
-            cfg["ssh_pwauth"] = util.is_false(value)
+    if ovf_env.disable_ssh_password_auth is None:
+        if ovf_env.password:
+            cfg["ssh_pwauth"] = True
+    else:
+        cfg["ssh_pwauth"] = not ovf_env.disable_ssh_password_auth
 
     defuser = {}
-    if username:
-        defuser["name"] = username
-    if password:
+    if ovf_env.username:
+        defuser["name"] = ovf_env.username
+    if ovf_env.password:
         defuser["lock_passwd"] = False
-        if DEF_PASSWD_REDACTION != password:
-            defuser["passwd"] = cfg["password"] = encrypt_pass(password)
+        if DEF_PASSWD_REDACTION != ovf_env.password:
+            defuser["passwd"] = cfg["password"] = encrypt_pass(
+                ovf_env.password
+            )
 
     if defuser:
         cfg["system_info"] = {"default_user": defuser}
 
-    if "ssh_pwauth" not in cfg and password:
-        cfg["ssh_pwauth"] = True
-
-    preprovisioning_cfg = _get_preprovisioning_cfgs(dom)
-    cfg = util.mergemanydict([cfg, preprovisioning_cfg])
-
+    report_diagnostic_event(
+        "PreprovisionedVm: %s" % ovf_env.preprovisioned_vm,
+        logger_func=LOG.info,
+    )
+    report_diagnostic_event(
+        "PreprovisionedVMType: %s" % ovf_env.preprovisioned_vm_type,
+        logger_func=LOG.info,
+    )
     return (md, ud, cfg)
-
-
-@azure_ds_telemetry_reporter
-def _get_preprovisioning_cfgs(dom):
-    """Read the preprovisioning related flags from ovf and populates a dict
-    with the info.
-
-    Two flags are in use today: PreprovisionedVm bool and
-    PreprovisionedVMType enum. In the long term, the PreprovisionedVm bool
-    will be deprecated in favor of PreprovisionedVMType string/enum.
-
-    Only these combinations of values are possible today:
-        - PreprovisionedVm=True and PreprovisionedVMType=Running
-        - PreprovisionedVm=False and PreprovisionedVMType=Savable
-        - PreprovisionedVm is missing and PreprovisionedVMType=Running/Savable
-        - PreprovisionedVm=False and PreprovisionedVMType is missing
-
-    More specifically, this will never happen:
-        - PreprovisionedVm=True and PreprovisionedVMType=Savable
-    """
-    cfg = {"PreprovisionedVm": False, "PreprovisionedVMType": None}
-
-    platform_settings_section = find_child(
-        dom.documentElement, lambda n: n.localName == "PlatformSettingsSection"
-    )
-    if not platform_settings_section or len(platform_settings_section) == 0:
-        LOG.debug("PlatformSettingsSection not found")
-        return cfg
-    platform_settings = find_child(
-        platform_settings_section[0],
-        lambda n: n.localName == "PlatformSettings",
-    )
-    if not platform_settings or len(platform_settings) == 0:
-        LOG.debug("PlatformSettings not found")
-        return cfg
-
-    # Read the PreprovisionedVm bool flag. This should be deprecated when the
-    # platform has removed PreprovisionedVm and only surfaces
-    # PreprovisionedVMType.
-    cfg["PreprovisionedVm"] = _get_preprovisionedvm_cfg_value(
-        platform_settings
-    )
-
-    cfg["PreprovisionedVMType"] = _get_preprovisionedvmtype_cfg_value(
-        platform_settings
-    )
-    return cfg
-
-
-@azure_ds_telemetry_reporter
-def _get_preprovisionedvm_cfg_value(platform_settings):
-    preprovisionedVm = False
-
-    # Read the PreprovisionedVm bool flag. This should be deprecated when the
-    # platform has removed PreprovisionedVm and only surfaces
-    # PreprovisionedVMType.
-    preprovisionedVmVal = find_child(
-        platform_settings[0], lambda n: n.localName == "PreprovisionedVm"
-    )
-    if not preprovisionedVmVal or len(preprovisionedVmVal) == 0:
-        LOG.debug("PreprovisionedVm not found")
-        return preprovisionedVm
-    preprovisionedVm = util.translate_bool(
-        preprovisionedVmVal[0].firstChild.nodeValue
-    )
-
-    report_diagnostic_event(
-        "PreprovisionedVm: %s" % preprovisionedVm, logger_func=LOG.info
-    )
-
-    return preprovisionedVm
-
-
-@azure_ds_telemetry_reporter
-def _get_preprovisionedvmtype_cfg_value(platform_settings):
-    preprovisionedVMType = None
-
-    # Read the PreprovisionedVMType value from the ovf. It can be
-    # 'Running' or 'Savable' or not exist. This enum value is intended to
-    # replace PreprovisionedVm bool flag in the long term.
-    # A Running VM is the same as preprovisioned VMs of today. This is
-    # equivalent to having PreprovisionedVm=True.
-    # A Savable VM is one whose nic is hot-detached immediately after it
-    # reports ready the first time to free up the network resources.
-    # Once assigned to customer, the customer-requested nics are
-    # hot-attached to it and reprovision happens like today.
-    preprovisionedVMTypeVal = find_child(
-        platform_settings[0], lambda n: n.localName == "PreprovisionedVMType"
-    )
-    if (
-        not preprovisionedVMTypeVal
-        or len(preprovisionedVMTypeVal) == 0
-        or preprovisionedVMTypeVal[0].firstChild is None
-    ):
-        LOG.debug("PreprovisionedVMType not found")
-        return preprovisionedVMType
-
-    preprovisionedVMType = preprovisionedVMTypeVal[0].firstChild.nodeValue
-
-    report_diagnostic_event(
-        "PreprovisionedVMType: %s" % preprovisionedVMType, logger_func=LOG.info
-    )
-
-    return preprovisionedVMType
 
 
 def encrypt_pass(password, salt_id="$6$"):

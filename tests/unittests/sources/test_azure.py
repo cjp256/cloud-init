@@ -2329,6 +2329,153 @@ scbus-1 on xpt0 bus 0
         self.assertEqual(dsrc.userdata_raw, userdataOVF.encode("utf-8"))
 
 
+class TestOvfEnvXml:
+    @pytest.mark.parametrize(
+        "ovf,expected",
+        [
+            (
+                construct_ovf_env(),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    custom_data=None,
+                    disable_ssh_password_auth=None,
+                    public_keys=[],
+                    preprovisioned_vm=False,
+                    preprovisioned_vm_type=None,
+                ),
+            ),
+            (
+                construct_ovf_env(),
+                dsaz.OvfEnvXml(username="test-user", hostname="test-host"),
+            ),
+            (
+                construct_ovf_env(public_keys=[]),
+                dsaz.OvfEnvXml(
+                    username="test-user", hostname="test-host", public_keys=[]
+                ),
+            ),
+            (
+                construct_ovf_env(
+                    public_keys=[
+                        {"fingerprint": "fp1", "path": "path1", "value": ""}
+                    ]
+                ),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    public_keys=[
+                        {"fingerprint": "fp1", "path": "path1", "value": ""}
+                    ],
+                ),
+            ),
+            (
+                construct_ovf_env(
+                    public_keys=[
+                        {"fingerprint": "fp1", "path": "path1", "value": ""},
+                        {
+                            "fingerprint": "fp2",
+                            "path": "path2",
+                            "value": "somevalue",
+                        },
+                    ]
+                ),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    public_keys=[
+                        {"fingerprint": "fp1", "path": "path1", "value": ""},
+                        {
+                            "fingerprint": "fp2",
+                            "path": "path2",
+                            "value": "somevalue",
+                        },
+                    ],
+                ),
+            ),
+            (
+                construct_ovf_env(custom_data="foo"),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    custom_data=b"foo",
+                ),
+            ),
+            (
+                construct_ovf_env(disable_ssh_password_auth=True),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    disable_ssh_password_auth=True,
+                ),
+            ),
+            (
+                construct_ovf_env(preprovisioned_vm=True),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    preprovisioned_vm=True,
+                ),
+            ),
+            (
+                construct_ovf_env(
+                    preprovisioned_vm=True, preprovisioned_vm_type="testpps"
+                ),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    preprovisioned_vm=True,
+                    preprovisioned_vm_type="testpps",
+                ),
+            ),
+            (
+                construct_ovf_env(password="fakepw"),
+                dsaz.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    password="fakepw",
+                ),
+            ),
+        ],
+    )
+    def test_valid_ovf_scenarios(self, ovf, expected):
+        assert dsaz.OvfEnvXml.parse_text(ovf) == expected
+
+    @pytest.mark.parametrize(
+        "ovf,error",
+        [
+            (
+                construct_ovf_env(username=None),
+                "No ovf-env.xml configuration for 'UserName'",
+            ),
+            (
+                construct_ovf_env(hostname=None),
+                "No ovf-env.xml configuration for 'HostName'",
+            ),
+        ],
+    )
+    def test_missing_required_fields(self, ovf, error):
+        with pytest.raises(dsaz.BrokenAzureDataSource) as exc_info:
+            dsaz.OvfEnvXml.parse_text(ovf)
+
+        assert str(exc_info.value) == error
+
+    def test_non_azure_ovf(self):
+        ovf = """\
+            <ns0:Environment xmlns="http://schemas.dmtf.org/ovf/environment/1"
+             xmlns:ns0="http://schemas.dmtf.org/ovf/environment/1"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            </ns0:Environment>"""
+
+        with pytest.raises(dsaz.NonAzureDataSource) as exc_info:
+            dsaz.OvfEnvXml.parse_text(ovf)
+
+        assert (
+            str(exc_info.value)
+            == "Ignoring non-Azure ovf-env.xml: ProvisioningSection not found"
+        )
+
+
 class TestLoadAzureDsDir(CiTestCase):
     """Tests for load_azure_ds_dir."""
 
