@@ -98,7 +98,7 @@ class PPSType(Enum):
 
 class ChassisAssetTag(Enum):
     AZURE_CLOUD = "7783-7084-3265-9085-8269-3286-77"
-    AZURE_STACK_Z = "253edab5-84d1-4d77-9c2b-615901e4c83e"
+    AZURE_STACK_Z = "7123-1084-1234-4585-2219-2096-24"
 
 
 PLATFORM_ENTROPY_SOURCE: Optional[str] = "/sys/firmware/acpi/tables/OEM0"
