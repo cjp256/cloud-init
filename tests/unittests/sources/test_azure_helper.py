@@ -1445,6 +1445,23 @@ class TestChassisAssetTag:
             )
         ]
 
+    def test_true_azure_stack_z(self, caplog, mock_dmi_read_dmi_data):
+        mock_dmi_read_dmi_data.return_value = (
+            azure_helper.ChassisAssetTag.AZURE_STACK_Z.value
+        )
+
+        asset_tag = azure_helper.ChassisAssetTag.query_system()
+
+        assert asset_tag == azure_helper.ChassisAssetTag.AZURE_STACK_Z
+        assert caplog.record_tuples == [
+            (
+                "cloudinit.sources.helpers.azure",
+                10,
+                "Azure chassis asset tag: "
+                "'7123-1084-1234-4585-2219-2096-24' (AZURE_STACK_Z)",
+            )
+        ]
+
     @pytest.mark.parametrize("tag", [None, "", "notazure"])
     def test_false_on_nonazure_chassis(
         self, caplog, mock_dmi_read_dmi_data, tag
