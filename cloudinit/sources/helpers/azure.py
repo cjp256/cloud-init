@@ -1070,6 +1070,7 @@ class NonAzureDataSource(Exception):
 
 class ChassisAssetTag(enum.Enum):
     AZURE_CLOUD = "7783-7084-3265-9085-8269-3286-77"
+    AZURE_STACK_Z = "7123-1084-1234-4585-2219-2096-24"
 
     @classmethod
     def query_system(cls) -> Optional["ChassisAssetTag"]:
