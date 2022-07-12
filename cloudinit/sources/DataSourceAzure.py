@@ -1945,12 +1945,38 @@ def generate_network_config_from_instance_network_metadata(
         # Any additional IPs of each type will be set as static
         # addresses.
         nicname = "eth{idx}".format(idx=idx)
+
+        # Increase route metric with each interface, ensuring that primary
+        # interface has lowest cost.
         dhcp_override = {"route-metric": (idx + 1) * 100}
-        dev_config: Dict[str, Any] = {
-            "dhcp4": True,
-            "dhcp4-overrides": dhcp_override,
-            "dhcp6": False,
-        }
+        dev_config: Dict[str, Any] = {}
+
+        # DHCPv4 enabled unless explicitly disabled.
+        ipv4_config = intf.get("ipv4", {})
+        dhcp4 = ipv4_config.get("dhcp", True)
+        if dhcp4:
+            dev_config["dhcp4"] = True
+            dev_config["dhcp4-overrides"] = dhcp_override
+        else:
+            dev_config["dhcp4"] = False
+
+        gateway4 = ipv4_config.get("gateway", None)
+        if gateway4:
+            dev_config["gateway4"] = gateway4
+
+        # DHCPv6 enabled if addresses are present unless explicitly disabled.
+        ipv6_config = intf.get("ipv6", {})
+        dhcp6 = ipv6_config.get("dhcp", None)
+        if dhcp6 or (dhcp6 is None and ipv6_config.get("ipAddress")):
+            dev_config["dhcp6"] = True
+            dev_config["dhcp6-overrides"] = dhcp_override
+        else:
+            dev_config["dhcp6"] = False
+
+        gateway6 = ipv6_config.get("gateway", None)
+        if gateway6:
+            dev_config["gateway6"] = gateway6
+
         for addr_type in ("ipv4", "ipv6"):
             addresses = intf.get(addr_type, {}).get("ipAddress", [])
             # If there are no available IP addresses, then we don't
@@ -1958,17 +1984,13 @@ def generate_network_config_from_instance_network_metadata(
             if not addresses:
                 LOG.debug("No %s addresses found for: %r", addr_type, intf)
                 continue
+
             has_ip_address = True
             if addr_type == "ipv4":
                 default_prefix = "24"
             else:
                 default_prefix = "128"
-                if addresses:
-                    dev_config["dhcp6"] = True
-                    # non-primary interfaces should have a higher
-                    # route-metric (cost) so default routes prefer
-                    # primary nic due to lower route-metric value
-                    dev_config["dhcp6-overrides"] = dhcp_override
+
             for addr in addresses[1:]:
                 # Append static address config for ip > 1
                 netPrefix = intf[addr_type]["subnet"][0].get(
@@ -1980,6 +2002,18 @@ def generate_network_config_from_instance_network_metadata(
                 dev_config["addresses"].append(
                     "{ip}/{prefix}".format(ip=privateIp, prefix=netPrefix)
                 )
+
+        dns = intf.get("dns", {})
+        if dns:
+            dev_config["nameservers"] = {}
+            addresses = dns.get("addresses", [])
+            if addresses:
+                dev_config["nameservers"]["addresses"] = addresses
+
+            searches = dns.get("search", [])
+            if searches:
+                dev_config["nameservers"]["search"] = searches
+
         if dev_config and has_ip_address:
             mac = normalize_mac_address(intf["macAddress"])
             dev_config.update(
