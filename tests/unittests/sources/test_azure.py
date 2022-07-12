@@ -483,6 +483,7 @@ IMDS_NETWORK_METADATA = {
     ]
 }
 
+
 EXAMPLE_UUID = "d0df4c54-4ecb-4a4b-9954-5bdf3ed5c3b8"
 
 
@@ -491,13 +492,116 @@ class TestGenerateNetworkConfig:
         "label,metadata,expected",
         [
             (
-                "simple interface",
-                NETWORK_METADATA["network"],
+                "ipv4 dhcp interface",
+                {
+                    "interface": [
+                        {
+                            "macAddress": "000D3A047598",
+                            "ipv6": {"ipAddress": []},
+                            "ipv4": {
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
+                                ],
+                                "ipAddress": [
+                                    {
+                                        "privateIpAddress": "10.0.0.4",
+                                        "publicIpAddress": "104.46.124.81",
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                },
                 {
                     "ethernets": {
                         "eth0": {
                             "dhcp4": True,
                             "dhcp4-overrides": {"route-metric": 100},
+                            "dhcp6": False,
+                            "match": {"macaddress": "00:0d:3a:04:75:98"},
+                            "set-name": "eth0",
+                        }
+                    },
+                    "version": 2,
+                },
+            ),
+            (
+                "static ipv4 interface",
+                {
+                    "interface": [
+                        {
+                            "macAddress": "000D3A047598",
+                            "ipv6": {"ipAddress": []},
+                            "ipv4": {
+                                "dhcp": False,
+                                "gateway": "10.0.0.1",
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
+                                ],
+                                "ipAddress": [
+                                    {
+                                        "privateIpAddress": "10.0.0.4",
+                                        "publicIpAddress": "104.46.124.81",
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                },
+                {
+                    "ethernets": {
+                        "eth0": {
+                            "dhcp4": False,
+                            "gateway4": "10.0.0.1",
+                            "dhcp6": False,
+                            "match": {"macaddress": "00:0d:3a:04:75:98"},
+                            "set-name": "eth0",
+                        }
+                    },
+                    "version": 2,
+                },
+            ),
+            (
+                "static ipv4 and ipv6 interface",
+                {
+                    "interface": [
+                        {
+                            "macAddress": "000D3A047598",
+                            "ipv4": {
+                                "dhcp": False,
+                                "gateway": "10.0.0.1",
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
+                                ],
+                                "ipAddress": [
+                                    {
+                                        "privateIpAddress": "10.0.0.4",
+                                        "publicIpAddress": "104.46.124.81",
+                                    }
+                                ],
+                            },
+                            "ipv6": {
+                                "dhcp": False,
+                                "subnet": [
+                                    {
+                                        "prefix": "10",
+                                        "address": "2001:dead:beef::16",
+                                    }
+                                ],
+                                "ipAddress": [
+                                    {"privateIpAddress": "2001:dead:beef::1"}
+                                ],
+                                "gateway": "2001:dead:beef::80",
+                            },
+                        }
+                    ]
+                },
+                {
+                    "ethernets": {
+                        "eth0": {
+                            "dhcp4": False,
+                            "gateway4": "10.0.0.1",
+                            "gateway6": "2001:dead:beef::80",
                             "dhcp6": False,
                             "match": {"macaddress": "00:0d:3a:04:75:98"},
                             "set-name": "eth0",
@@ -604,6 +708,48 @@ class TestGenerateNetworkConfig:
                             "dhcp6-overrides": {"route-metric": 100},
                             "match": {"macaddress": "00:0d:3a:04:75:98"},
                             "set-name": "eth0",
+                        }
+                    },
+                    "version": 2,
+                },
+            ),
+            (
+                "dns",
+                {
+                    "interface": [
+                        {
+                            "dns": {
+                                "search": ["mycorp"],
+                                "addresses": ["1.1.1.1", "8.8.8.8"],
+                            },
+                            "macAddress": "000D3A047598",
+                            "ipv6": {"ipAddress": []},
+                            "ipv4": {
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
+                                ],
+                                "ipAddress": [
+                                    {
+                                        "privateIpAddress": "10.0.0.4",
+                                        "publicIpAddress": "104.46.124.81",
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                },
+                {
+                    "ethernets": {
+                        "eth0": {
+                            "dhcp4": True,
+                            "dhcp4-overrides": {"route-metric": 100},
+                            "dhcp6": False,
+                            "match": {"macaddress": "00:0d:3a:04:75:98"},
+                            "set-name": "eth0",
+                            "nameservers": {
+                                "search": ["mycorp"],
+                                "addresses": ["1.1.1.1", "8.8.8.8"],
+                            },
                         }
                     },
                     "version": 2,
