@@ -1991,7 +1991,7 @@ def generate_network_config_from_instance_network_metadata(
     """
     netconfig: Dict[str, Any] = {"version": 2, "ethernets": {}}
     for idx, intf in enumerate(network_metadata["interface"]):
-        has_ip_address = False
+        generate_config = False
         # First IPv4 and/or IPv6 address will be obtained via DHCP.
         # Any additional IPs of each type will be set as static
         # addresses.
@@ -2002,15 +2002,15 @@ def generate_network_config_from_instance_network_metadata(
         dhcp_override = {"route-metric": (idx + 1) * 100}
         dev_config: Dict[str, Any] = {}
 
-        # DHCPv4 enabled unless explicitly disabled.
         ipv4_config = intf.get("ipv4", {})
-        dhcp4 = ipv4_config.get("dhcp", True)
-        if dhcp4:
-            generate_config = True
+        dhcp4 = ipv4_config.get("dhcp", None)
+
+        # DHCPv4 enabled unless explicitly disabled or no IP addresses.
+        if dhcp4 is False:
+            dev_config["dhcp4"] = False
+        else:
             dev_config["dhcp4"] = True
             dev_config["dhcp4-overrides"] = dhcp_override
-        else:
-            dev_config["dhcp4"] = False
 
         gateway4 = ipv4_config.get("gateway", None)
         if gateway4:
@@ -2029,6 +2029,10 @@ def generate_network_config_from_instance_network_metadata(
         gateway6 = ipv6_config.get("gateway", None)
         if gateway6:
             dev_config["gateway6"] = gateway6
+
+        if dhcp4 or dhcp6 or (dhcp4 is None and ipv4_config.get("ipAddress")):
+            # Always generate config if dhcp is explictly enabled.
+            generate_config = True
 
         for addr_type in ("ipv4", "ipv6"):
             addresses = intf.get(addr_type, {}).get("ipAddress", [])
@@ -2082,10 +2086,9 @@ def generate_network_config_from_instance_network_metadata(
             continue
 
         LOG.debug(
-            "No configuration for: %s (dev_config=%r) (has_ip_address=%r)",
+            "No configuration for: %s (dev_config=%r)",
             nicname,
             dev_config,
-            has_ip_address,
         )
     return netconfig
 

@@ -508,7 +508,7 @@ class TestGenerateNetworkConfig:
         "label,metadata,expected",
         [
             (
-                "ipv4 dhcp interface",
+                "ipv4 default dhcp interface",
                 {
                     "interface": [
                         {
@@ -523,6 +523,70 @@ class TestGenerateNetworkConfig:
                                         "privateIpAddress": "10.0.0.4",
                                         "publicIpAddress": "104.46.124.81",
                                     }
+                                ],
+                            },
+                        }
+                    ]
+                },
+                {
+                    "ethernets": {
+                        "eth0": {
+                            "dhcp4": True,
+                            "dhcp4-overrides": {"route-metric": 100},
+                            "dhcp6": False,
+                            "match": {"macaddress": "00:0d:3a:04:75:98"},
+                            "set-name": "eth0",
+                        }
+                    },
+                    "version": 2,
+                },
+            ),
+            (
+                "ipv4 explicit dhcp interface",
+                {
+                    "interface": [
+                        {
+                            "macAddress": "000D3A047598",
+                            "ipv6": {"ipAddress": []},
+                            "ipv4": {
+                                "dhcp": True,
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
+                                ],
+                                "ipAddress": [
+                                    {
+                                        "privateIpAddress": "10.0.0.4",
+                                        "publicIpAddress": "104.46.124.81",
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                },
+                {
+                    "ethernets": {
+                        "eth0": {
+                            "dhcp4": True,
+                            "dhcp4-overrides": {"route-metric": 100},
+                            "dhcp6": False,
+                            "match": {"macaddress": "00:0d:3a:04:75:98"},
+                            "set-name": "eth0",
+                        }
+                    },
+                    "version": 2,
+                },
+            ),
+            (
+                "ipv4 explicit dhcp w/o addresses",
+                {
+                    "interface": [
+                        {
+                            "macAddress": "000D3A047598",
+                            "ipv6": {"ipAddress": []},
+                            "ipv4": {
+                                "dhcp": True,
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
                                 ],
                             },
                         }
@@ -804,6 +868,27 @@ class TestGenerateNetworkConfig:
                             "set-name": "eth0",
                         }
                     },
+                    "version": 2,
+                },
+            ),
+            (
+                "no config interface",
+                {
+                    "interface": [
+                        {
+                            "macAddress": "000D3A047598",
+                            "ipv6": {"ipAddress": []},
+                            "ipv4": {
+                                "subnet": [
+                                    {"prefix": "24", "address": "10.0.0.0"}
+                                ],
+                                "ipAddress": [],
+                            },
+                        }
+                    ]
+                },
+                {
+                    "ethernets": {},
                     "version": 2,
                 },
             ),
@@ -1797,7 +1882,8 @@ scbus-1 on xpt0 bus 0
         self.m_get_metadata_from_imds.return_value = imds_data
         dsrc = self._get_ds(data)
         dsrc.get_data()
-        self.assertEqual(expected_network_config, dsrc.network_config)
+
+        assert expected_network_config == dsrc.network_config
 
     def test_availability_zone_set_from_imds(self):
         """Datasource.availability returns IMDS platformFaultDomain."""
