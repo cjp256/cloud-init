@@ -559,7 +559,8 @@ class DataSourceAzure(sources.DataSource):
 
         self._disable_imds = cfg.pop("_disable_imds", False)
         self._disable_wireserver = cfg.pop("_disable_wireserver", False)
-        self._ovf_network_config = cfg.pop("_network", None)
+        if "_network" in cfg:
+            self._ovf_network_config = cfg.pop("_network", None)
 
         # If we read OVF from attached media, we are provisioning.  If OVF
         # is not found, we are probably provisioning on a system which does
@@ -1572,14 +1573,21 @@ class DataSourceAzure(sources.DataSource):
                 and self._metadata_imds != sources.UNSET
                 and "network" in self._metadata_imds
             ):
+                LOG.debug("_generate_network_config: using IMDS data")
                 network_config = self._metadata_imds["network"]
             elif (
                 self._ovf_network_config
                 and self._ovf_network_config != sources.UNSET
             ):
+                LOG.debug("_generate_network_config: using OVF data")
                 network_config = self._ovf_network_config
+            elif network_config:
+                LOG.debug("_generate_network_config: using cached config")
+            else:
+                LOG.debug("_generate_network_config: no config found")
 
             if network_config:
+                LOG.debug("_generate_network_config: creating network config")
                 try:
                     return (
                         generate_network_config_from_instance_network_metadata(
@@ -1595,6 +1603,7 @@ class DataSourceAzure(sources.DataSource):
 
         # Generate fallback configuration.
         try:
+            LOG.debug("_generate_network_config: using fallback configuration")
             return _generate_network_config_from_fallback_config()
         except Exception as e:
             LOG.error("Failed generating fallback network config: %s", str(e))
