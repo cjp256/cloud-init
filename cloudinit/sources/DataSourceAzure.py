@@ -2049,6 +2049,7 @@ def generate_network_config_from_instance_network_metadata(
     """
     netconfig: Dict[str, Any] = {"version": 2, "ethernets": {}}
     for idx, intf in enumerate(network_metadata["interface"]):
+        generate_config = False
         has_ip_address = False
         # First IPv4 and/or IPv6 address will be obtained via DHCP.
         # Any additional IPs of each type will be set as static
@@ -2062,8 +2063,8 @@ def generate_network_config_from_instance_network_metadata(
 
         # DHCPv4 enabled unless explicitly disabled.
         ipv4_config = intf.get("ipv4", {})
-        dhcp4 = ipv4_config.get("dhcp", True)
-        if dhcp4:
+        dhcp4 = ipv4_config.get("dhcp")
+        if dhcp4 or (dhcp4 is None and ipv4_config.get("ipAddress")):
             generate_config = True
             dev_config["dhcp4"] = True
             dev_config["dhcp4-overrides"] = dhcp_override
@@ -2076,7 +2077,7 @@ def generate_network_config_from_instance_network_metadata(
 
         # DHCPv6 enabled if addresses are present unless explicitly disabled.
         ipv6_config = intf.get("ipv6", {})
-        dhcp6 = ipv6_config.get("dhcp", None)
+        dhcp6 = ipv6_config.get("dhcp")
         if dhcp6 or (dhcp6 is None and ipv6_config.get("ipAddress")):
             generate_config = True
             dev_config["dhcp6"] = True
