@@ -2108,17 +2108,23 @@ def generate_network_config_from_instance_network_metadata(
             else:
                 default_prefix = "128"
 
-            for addr in addresses[1:]:
+            for addr_idx, addr in enumerate(addresses):
+                if addr_idx == 0 and (
+                    (addr_type == "ipv4" and dev_config["dhcp4"])
+                    or (addr_type == "ipv6" and dev_config["dhcp6"])
+                ):
+                    continue
+
                 # Append static address config for ip > 1
                 netPrefix = intf[addr_type]["subnet"][0].get(
                     "prefix", default_prefix
                 )
                 privateIp = addr["privateIpAddress"]
-                if not dev_config.get("addresses"):
-                    dev_config["addresses"] = []
-                dev_config["addresses"].append(
+                addrs = dev_config.get("addresses", [])
+                addrs.append(
                     "{ip}/{prefix}".format(ip=privateIp, prefix=netPrefix)
                 )
+                dev_config["addresses"] = addrs
 
         dns = intf.get("dns", {})
         if dns:

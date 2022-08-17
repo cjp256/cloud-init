@@ -572,6 +572,7 @@ class TestGenerateNetworkConfig:
                             "dhcp6": False,
                             "match": {"macaddress": "00:0d:3a:04:75:98"},
                             "set-name": "eth0",
+                            "addresses": ["10.0.0.4/24"],
                         }
                     },
                     "version": 2,
@@ -587,7 +588,7 @@ class TestGenerateNetworkConfig:
                                 "dhcp": False,
                                 "gateway": "10.0.0.1",
                                 "subnet": [
-                                    {"prefix": "24", "address": "10.0.0.0"}
+                                    {"prefix": "28", "address": "10.0.0.0"}
                                 ],
                                 "ipAddress": [
                                     {
@@ -621,6 +622,10 @@ class TestGenerateNetworkConfig:
                             "dhcp6": False,
                             "match": {"macaddress": "00:0d:3a:04:75:98"},
                             "set-name": "eth0",
+                            "addresses": [
+                                "10.0.0.4/28",
+                                "2001:dead:beef::1/10",
+                            ],
                         }
                     },
                     "version": 2,
@@ -4902,6 +4907,7 @@ class TestProvisioning:
                 "eth0": {
                     "dhcp4": False,
                     "dhcp6": False,
+                    "addresses": ["10.0.0.4/24"],
                     "nameservers": {
                         "addresses": ["1.1.1.1", "8.8.8.8"],
                         "search": ["mycorp"],
