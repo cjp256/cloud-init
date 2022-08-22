@@ -333,6 +333,8 @@ class DataSourceAzure(sources.DataSource):
     }
     _negotiated = False
     _metadata_imds = sources.UNSET
+    _metadata_ovf_network = sources.UNSET
+    _network_config = sources.UNSET
     _ci_pkl_version = 1
 
     def __init__(self, sys_cfg, distro, paths):
@@ -346,7 +348,6 @@ class DataSourceAzure(sources.DataSource):
         self._disable_imds = False
         self._disable_wireserver = False
         self._iso_dev = None
-        self._network_config = None
         self._ovf_network_config = None
         self._ephemeral_dhcp_ctx = None
         self._wireserver_endpoint = DEFAULT_WIRESERVER_ENDPOINT
@@ -1575,14 +1576,9 @@ class DataSourceAzure(sources.DataSource):
             ):
                 LOG.debug("_generate_network_config: using IMDS data")
                 network_config = self._metadata_imds["network"]
-            elif (
-                self._ovf_network_config
-                and self._ovf_network_config != sources.UNSET
-            ):
+            elif self._ovf_network_config:
                 LOG.debug("_generate_network_config: using OVF data")
                 network_config = self._ovf_network_config
-            elif network_config:
-                LOG.debug("_generate_network_config: using cached config")
             else:
                 LOG.debug("_generate_network_config: no config found")
 
