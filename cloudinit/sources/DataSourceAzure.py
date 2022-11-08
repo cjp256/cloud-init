@@ -333,7 +333,7 @@ class DataSourceAzure(sources.DataSource):
     }
     _negotiated = False
     _metadata_imds = sources.UNSET
-    _metadata_ovf_network = sources.UNSET
+    _metadata_asz_network = sources.UNSET
     _network_config = sources.UNSET
     _ci_pkl_version = 1
 
@@ -345,10 +345,10 @@ class DataSourceAzure(sources.DataSource):
         self.ds_cfg = util.mergemanydict(
             [util.get_cfg_by_path(sys_cfg, DS_CFG_PATH, {}), BUILTIN_DS_CONFIG]
         )
-        self._disable_imds = False
-        self._disable_wireserver = False
+        self._asz_disable_imds = False
+        self._asz_disable_wireserver = False
+        self._asz_network = None
         self._iso_dev = None
-        self._ovf_network_config = None
         self._ephemeral_dhcp_ctx = None
         self._wireserver_endpoint = DEFAULT_WIRESERVER_ENDPOINT
         self._reported_ready_marker_file = os.path.join(
@@ -358,11 +358,11 @@ class DataSourceAzure(sources.DataSource):
     def _unpickle(self, ci_pkl_version: int) -> None:
         super()._unpickle(ci_pkl_version)
 
-        self._disable_imds = False
-        self._disable_wireserver = False
+        self._asz_disable_imds = False
+        self._asz_disable_wireserver = False
+        self._asz_network = None
         self._ephemeral_dhcp_ctx = None
         self._iso_dev = None
-        self._ovf_network_config = None
         self._wireserver_endpoint = DEFAULT_WIRESERVER_ENDPOINT
         self._reported_ready_marker_file = os.path.join(
             self.paths.cloud_dir, "data", "reported_ready"
@@ -558,10 +558,12 @@ class DataSourceAzure(sources.DataSource):
             logger_func=LOG.debug,
         )
 
-        self._disable_imds = cfg.pop("_disable_imds", False)
-        self._disable_wireserver = cfg.pop("_disable_wireserver", False)
-        if "_network" in cfg:
-            self._ovf_network_config = cfg.pop("_network", None)
+        self._asz_disable_imds = cfg.pop("_asz_disable_imds", False)
+        self._asz_disable_wireserver = cfg.pop(
+            "_asz_disable_wireserver", False
+        )
+        if "_asz_network" in cfg:
+            self._asz_network = cfg.pop("_asz_network", None)
 
         # If we read OVF from attached media, we are provisioning.  If OVF
         # is not found, we are probably provisioning on a system which does
@@ -569,7 +571,7 @@ class DataSourceAzure(sources.DataSource):
         # If we require IMDS metadata, try harder to obtain networking, waiting
         # for at least 20 minutes.  Otherwise only wait 5 minutes.
         # No need for networking if IMDS and Wireserver are disabled.
-        if not self._disable_imds or not self._disable_wireserver:
+        if not self._asz_disable_imds or not self._asz_disable_wireserver:
             requires_imds_metadata = (
                 bool(self._iso_dev) or not ovf_is_accessible
             )
@@ -581,7 +583,7 @@ class DataSourceAzure(sources.DataSource):
             except NoDHCPLeaseError:
                 pass
 
-        if self._is_ephemeral_networking_up() and not self._disable_imds:
+        if self._is_ephemeral_networking_up() and not self._asz_disable_imds:
             imds_md = self.get_imds_data_with_api_fallback(retries=10)
         else:
             imds_md = {}
@@ -599,7 +601,7 @@ class DataSourceAzure(sources.DataSource):
                 report_diagnostic_event(msg, logger_func=LOG.error)
                 raise sources.InvalidMetaDataException(msg)
 
-            if self._disable_wireserver or self._disable_imds:
+            if self._asz_disable_wireserver or self._asz_disable_imds:
                 msg = "Wireserver and IMDS are required for PPS VMs"
                 report_diagnostic_event(msg, logger_func=LOG.error)
                 raise sources.InvalidMetaDataException(msg)
@@ -694,7 +696,7 @@ class DataSourceAzure(sources.DataSource):
         crawled_data["metadata"]["instance-id"] = self._iid()
 
         if (
-            not self._disable_wireserver
+            not self._asz_disable_wireserver
             and not self._negotiated
             and self._is_ephemeral_networking_up()
         ):
@@ -753,7 +755,7 @@ class DataSourceAzure(sources.DataSource):
             report_diagnostic_event(
                 "Could not crawl Azure metadata: %s" % e, logger_func=LOG.error
             )
-            if not self._disable_wireserver:
+            if not self._asz_disable_wireserver:
                 self._report_failure(
                     description=DEFAULT_REPORT_FAILURE_USER_VISIBLE_MESSAGE
                 )
@@ -1576,9 +1578,9 @@ class DataSourceAzure(sources.DataSource):
             ):
                 LOG.debug("_generate_network_config: using IMDS data")
                 network_config = self._metadata_imds["network"]
-            elif self._ovf_network_config:
-                LOG.debug("_generate_network_config: using OVF data")
-                network_config = self._ovf_network_config
+            elif self._asz_network:
+                LOG.debug("_generate_network_config: using ASZ config")
+                network_config = self._asz_network
             else:
                 LOG.debug("_generate_network_config: no config found")
 
@@ -1942,14 +1944,14 @@ def read_azure_ovf(contents):
     elif ovf_env.password:
         cfg["ssh_pwauth"] = True
 
-    if ovf_env.disable_imds:
-        cfg["_disable_imds"] = ovf_env.disable_imds
+    if ovf_env.asz_disable_imds:
+        cfg["_asz_disable_imds"] = ovf_env.asz_disable_imds
 
-    if ovf_env.disable_wireserver:
-        cfg["_disable_wireserver"] = ovf_env.disable_wireserver
+    if ovf_env.asz_disable_wireserver:
+        cfg["_asz_disable_wireserver"] = ovf_env.asz_disable_wireserver
 
-    if ovf_env.network:
-        cfg["_network"] = ovf_env.network
+    if ovf_env.asz_network:
+        cfg["_asz_network"] = ovf_env.asz_network
 
     defuser = {}
     if ovf_env.username:

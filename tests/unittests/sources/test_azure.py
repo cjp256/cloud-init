@@ -317,16 +317,16 @@ def patched_reported_ready_marker_path(azure_ds, patched_markers_dir_path):
 def construct_ovf_env(
     *,
     custom_data=None,
-    network=None,
     hostname="test-host",
     username="test-user",
     password=None,
     public_keys=None,
-    disable_imds=None,
     disable_ssh_password_auth=None,
-    disable_wireserver=None,
     preprovisioned_vm=None,
     preprovisioned_vm_type=None,
+    asz_network=None,
+    asz_disable_imds=None,
+    asz_disable_wireserver=None,
 ):
     content = [
         '<?xml version="1.0" encoding="utf-8"?>',
@@ -334,13 +334,44 @@ def construct_ovf_env(
         'xmlns:ns0="http://schemas.dmtf.org/ovf/environment/1"',
         'xmlns:ns1="http://schemas.microsoft.com/windowsazure"',
         'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
-        "<ns1:ProvisioningSection>",
-        "<ns1:Version>1.0</ns1:Version>",
-        "<ns1:LinuxProvisioningConfigurationSet>",
-        "<ns1:ConfigurationSetType>"
-        "LinuxProvisioningConfiguration"
-        "</ns1:ConfigurationSetType>",
     ]
+
+    asz_content = []
+    if asz_disable_imds is not None:
+        asz_content.append(
+            "<ns1:DisableIMDS>%s" % str(asz_disable_imds).lower()
+            + "</ns1:DisableIMDS>"
+        )
+    if asz_disable_wireserver is not None:
+        asz_content.append(
+            "<ns1:DisableWireserver>%s" % str(asz_disable_wireserver).lower()
+            + "</ns1:DisableWireserver>"
+        )
+    if asz_network is not None:
+        asz_network = json.dumps(asz_network)
+        asz_content.append(
+            "<ns1:Network>%s</ns1:Network>" % (b64e(asz_network))
+        )
+
+    if asz_content:
+        content.extend(
+            [
+                "<ns1:AzureStackConfigurationSection>",
+                *asz_content,
+                "</ns1:AzureStackConfigurationSection>",
+            ]
+        )
+
+    content.extend(
+        [
+            "<ns1:ProvisioningSection>",
+            "<ns1:Version>1.0</ns1:Version>",
+            "<ns1:LinuxProvisioningConfigurationSet>",
+            "<ns1:ConfigurationSetType>"
+            "LinuxProvisioningConfiguration"
+            "</ns1:ConfigurationSetType>",
+        ]
+    )
     if hostname is not None:
         content.append("<ns1:HostName>%s</ns1:HostName>" % hostname)
     if username is not None:
@@ -351,24 +382,11 @@ def construct_ovf_env(
         content.append(
             "<ns1:CustomData>%s</ns1:CustomData>" % (b64e(custom_data))
         )
-    if network is not None:
-        network = json.dumps(network)
-        content.append("<ns1:Network>%s</ns1:Network>" % (b64e(network)))
-    if disable_imds is not None:
-        content.append(
-            "<ns1:DisableIMDS>%s" % str(disable_imds).lower()
-            + "</ns1:DisableIMDS>"
-        )
     if disable_ssh_password_auth is not None:
         content.append(
             "<ns1:DisableSshPasswordAuthentication>%s"
             % str(disable_ssh_password_auth).lower()
             + "</ns1:DisableSshPasswordAuthentication>"
-        )
-    if disable_wireserver is not None:
-        content.append(
-            "<ns1:DisableWireserver>%s" % str(disable_wireserver).lower()
-            + "</ns1:DisableWireserver>"
         )
     if public_keys is not None:
         content += ["<ns1:SSH>", "<ns1:PublicKeys>"]
@@ -416,7 +434,9 @@ def construct_ovf_env(
         "</ns0:Environment>",
     ]
 
-    return "\n".join(content)
+    ovf = "\n".join(content)
+    print(ovf)
+    return ovf
 
 
 NETWORK_METADATA = {
@@ -4868,7 +4888,9 @@ class TestProvisioning:
             ]
         }
         ovf = construct_ovf_env(
-            disable_wireserver=True, disable_imds=True, network=network_config
+            asz_disable_wireserver=True,
+            asz_disable_imds=True,
+            asz_network=network_config,
         )
 
         seed_path = Path(self.azure_ds.paths.seed_dir, "azure")

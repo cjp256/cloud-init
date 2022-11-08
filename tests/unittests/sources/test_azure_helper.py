@@ -1583,24 +1583,6 @@ class TestOvfEnvXml:
                     custom_data=b"foo",
                 ),
             ),
-            # Network.
-            (
-                construct_ovf_env(network={"foo": "bar"}),
-                azure_helper.OvfEnvXml(
-                    username="test-user",
-                    hostname="test-host",
-                    network={"foo": "bar"},
-                ),
-            ),
-            # Disable IMDS.
-            (
-                construct_ovf_env(disable_imds=True),
-                azure_helper.OvfEnvXml(
-                    username="test-user",
-                    hostname="test-host",
-                    disable_imds=True,
-                ),
-            ),
             # Disable ssh password auth.
             (
                 construct_ovf_env(disable_ssh_password_auth=True),
@@ -1608,15 +1590,6 @@ class TestOvfEnvXml:
                     username="test-user",
                     hostname="test-host",
                     disable_ssh_password_auth=True,
-                ),
-            ),
-            # Disable wireserver.
-            (
-                construct_ovf_env(disable_wireserver=True),
-                azure_helper.OvfEnvXml(
-                    username="test-user",
-                    hostname="test-host",
-                    disable_wireserver=True,
                 ),
             ),
             # Preprovisioned vm.
@@ -1643,6 +1616,51 @@ class TestOvfEnvXml:
                     username="test-user",
                     hostname="test-host",
                     preprovisioned_vm_type="testpps",
+                ),
+            ),
+            # ASZ Network.
+            (
+                construct_ovf_env(
+                    asz_network={"foo": "bar"},
+                    asz_disable_imds=False,
+                    asz_disable_wireserver=False,
+                ),
+                azure_helper.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    asz_disable_imds=False,
+                    asz_disable_wireserver=False,
+                    asz_network={"foo": "bar"},
+                ),
+            ),
+            # ASZ Disable IMDS.
+            (
+                construct_ovf_env(
+                    asz_disable_imds=True,
+                    asz_disable_wireserver=False,
+                    asz_network={},
+                ),
+                azure_helper.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    asz_disable_imds=True,
+                    asz_disable_wireserver=False,
+                    asz_network={},
+                ),
+            ),
+            # ASZ Disable wireserver.
+            (
+                construct_ovf_env(
+                    asz_disable_wireserver=True,
+                    asz_network={},
+                    asz_disable_imds=False,
+                ),
+                azure_helper.OvfEnvXml(
+                    username="test-user",
+                    hostname="test-host",
+                    asz_disable_imds=False,
+                    asz_disable_wireserver=True,
+                    asz_network={},
                 ),
             ),
         ],
@@ -1741,7 +1759,6 @@ class TestOvfEnvXml:
             </ns1:ConfigurationSetType>
             <ns1:HostName>test-host2</ns1:HostName>
             <ns1:UserName>test-user</ns1:UserName>
-            <ns1:Network>ZmFpbAo=</ns1:Network>
             </ns1:LinuxProvisioningConfigurationSet>
             </ns1:ProvisioningSection>
             <ns1:PlatformSettingsSection>
@@ -1749,6 +1766,9 @@ class TestOvfEnvXml:
             <ns1:PlatformSettings>
             </ns1:PlatformSettings>
             </ns1:PlatformSettingsSection>
+            <ns1:AzureStackConfigurationSection>
+            <ns1:Network>ZmFpbAo=</ns1:Network>
+            </ns1:AzureStackConfigurationSection>
             </ns0:Environment>"""
 
         with pytest.raises(azure_helper.BrokenAzureDataSource) as exc_info:

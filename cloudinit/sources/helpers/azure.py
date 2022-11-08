@@ -1119,25 +1119,25 @@ class OvfEnvXml:
         password: Optional[str] = None,
         hostname: Optional[str] = None,
         custom_data: Optional[bytes] = None,
-        disable_imds: Optional[bool] = None,
         disable_ssh_password_auth: Optional[bool] = None,
-        disable_wireserver: Optional[bool] = None,
-        network: Optional[dict] = None,
         public_keys: Optional[List[dict]] = None,
         preprovisioned_vm: bool = False,
         preprovisioned_vm_type: Optional[str] = None,
+        asz_disable_imds: Optional[bool] = None,
+        asz_disable_wireserver: Optional[bool] = None,
+        asz_network: Optional[dict] = None,
     ) -> None:
         self.username = username
         self.password = password
         self.hostname = hostname
         self.custom_data = custom_data
-        self.network = network
-        self.disable_imds = disable_imds
         self.disable_ssh_password_auth = disable_ssh_password_auth
-        self.disable_wireserver = disable_wireserver
         self.public_keys: List[dict] = public_keys or []
         self.preprovisioned_vm = preprovisioned_vm
         self.preprovisioned_vm_type = preprovisioned_vm_type
+        self.asz_disable_imds = asz_disable_imds
+        self.asz_disable_wireserver = asz_disable_wireserver
+        self.asz_network = asz_network
 
     def __eq__(self, other) -> bool:
         return self.__dict__ == other.__dict__
@@ -1164,6 +1164,7 @@ class OvfEnvXml:
         instance = OvfEnvXml()
         instance._parse_linux_configuration_set_section(root)
         instance._parse_platform_settings_section(root)
+        instance._parse_azure_stack_configuration_section(root)
 
         return instance
 
@@ -1241,6 +1242,33 @@ class OvfEnvXml:
 
         return value
 
+    def _parse_azure_stack_configuration_section(self, root):
+        asz_section = self._find(
+            root, "AzureStackConfigurationSection", required=False
+        )
+        if not asz_section:
+            return
+
+        self.asz_network = self._parse_property(
+            asz_section,
+            "Network",
+            decode_base64=True,
+            parse_json=True,
+            required=True,
+        )
+        self.asz_disable_imds = self._parse_property(
+            asz_section,
+            "DisableIMDS",
+            parse_bool=True,
+            required=True,
+        )
+        self.asz_disable_wireserver = self._parse_property(
+            asz_section,
+            "DisableWireserver",
+            parse_bool=True,
+            required=True,
+        )
+
     def _parse_linux_configuration_set_section(self, root):
         provisioning_section = self._find(
             root, "ProvisioningSection", required=True
@@ -1257,13 +1285,6 @@ class OvfEnvXml:
             decode_base64=True,
             required=False,
         )
-        self.network = self._parse_property(
-            config_set,
-            "Network",
-            decode_base64=True,
-            parse_json=True,
-            required=False,
-        )
         self.username = self._parse_property(
             config_set, "UserName", required=True
         )
@@ -1273,21 +1294,9 @@ class OvfEnvXml:
         self.hostname = self._parse_property(
             config_set, "HostName", required=True
         )
-        self.disable_imds = self._parse_property(
-            config_set,
-            "DisableIMDS",
-            parse_bool=True,
-            required=False,
-        )
         self.disable_ssh_password_auth = self._parse_property(
             config_set,
             "DisableSshPasswordAuthentication",
-            parse_bool=True,
-            required=False,
-        )
-        self.disable_wireserver = self._parse_property(
-            config_set,
-            "DisableWireserver",
             parse_bool=True,
             required=False,
         )
