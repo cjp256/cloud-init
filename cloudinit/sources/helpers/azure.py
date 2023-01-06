@@ -20,6 +20,7 @@ from xml.sax.saxutils import escape
 from cloudinit import distros, dmi, subp, temp_utils, url_helper, util, version
 from cloudinit.reporting import events
 from cloudinit.settings import CFG_BUILTIN
+from cloudinit.sources.azure import errors as azure_errors
 
 LOG = logging.getLogger(__name__)
 
@@ -451,10 +452,6 @@ class AzureEndpointHttpClient:
         return http_with_retries(url, data=data, headers=headers)
 
 
-class InvalidGoalStateXMLException(Exception):
-    """Raised when GoalState XML is invalid or has missing data."""
-
-
 class GoalState:
     def __init__(
         self,
@@ -474,11 +471,10 @@ class GoalState:
         try:
             self.root = ElementTree.fromstring(unparsed_xml)
         except ElementTree.ParseError as e:
-            report_diagnostic_event(
-                "Failed to parse GoalState XML: %s" % e,
-                logger_func=LOG.warning,
+            reason = "Failed to parse GoalState XML: %s" % e
+            raise azure_errors.ReportableErrorWireserverInvalidGoalState(
+                reason
             )
-            raise
 
         self.container_id = self._text_from_xpath("./Container/ContainerId")
         self.instance_id = self._text_from_xpath(
@@ -488,9 +484,10 @@ class GoalState:
 
         for attr in ("container_id", "instance_id", "incarnation"):
             if getattr(self, attr) is None:
-                msg = "Missing %s in GoalState XML" % attr
-                report_diagnostic_event(msg, logger_func=LOG.warning)
-                raise InvalidGoalStateXMLException(msg)
+                reason = "Missing %s in GoalState XML" % attr
+                raise azure_errors.ReportableErrorWireserverInvalidGoalState(
+                    reason
+                )
 
         self.certificates_xml = None
         url = self._text_from_xpath(
@@ -507,7 +504,7 @@ class GoalState:
                     url, secure=True
                 ).contents
                 if self.certificates_xml is None:
-                    raise InvalidGoalStateXMLException(
+                    raise azure_errors.ReportableErrorWireserverInvalidGoalState(
                         "Azure endpoint returned empty certificates xml."
                     )
 
@@ -1053,9 +1050,11 @@ def get_metadata_from_fabric(
 
 
 @azure_ds_telemetry_reporter
-def report_failure_to_fabric(endpoint: str):
+def report_failure_to_fabric(
+    endpoint: str, error: azure_errors.ReportableError
+):
     shim = WALinuxAgentShim(endpoint=endpoint)
-    description = DEFAULT_REPORT_FAILURE_USER_VISIBLE_MESSAGE
+    description = error.as_description()
     try:
         shim.register_with_azure_and_report_failure(description=description)
     finally:
@@ -1069,10 +1068,6 @@ def dhcp_log_cb(out, err):
     report_diagnostic_event(
         "dhclient error stream: %s" % err, logger_func=LOG.debug
     )
-
-
-class BrokenAzureDataSource(Exception):
-    pass
 
 
 class NonAzureDataSource(Exception):
@@ -1140,13 +1135,13 @@ class OvfEnvXml:
         """Parser for ovf-env.xml data.
 
         :raises NonAzureDataSource: if XML is not in Azure's format.
-        :raises BrokenAzureDataSource: if XML is unparseable or invalid.
+        :raises azure_errors.ReportableErrorInvalidOvfEnvXml: if XML is unparseable or invalid.
         """
         try:
             root = ElementTree.fromstring(ovf_env_xml)
         except ElementTree.ParseError as e:
-            error_str = "Invalid ovf-env.xml: %s" % e
-            raise BrokenAzureDataSource(error_str) from e
+            reason = "Invalid ovf-env.xml: %s" % e
+            raise azure_errors.ReportableErrorMediaInvalidOvfEnvXml(reason)
 
         # If there's no provisioning section, it's not Azure ovf-env.xml.
         if not root.find("./wa:ProvisioningSection", cls.NAMESPACES):
@@ -1172,12 +1167,12 @@ class OvfEnvXml:
         )
         if len(matches) == 0:
             msg = "No ovf-env.xml configuration for %r" % name
-            LOG.debug(msg)
             if required:
-                raise BrokenAzureDataSource(msg)
+                raise azure_errors.ReportableErrorMediaInvalidOvfEnvXml(msg)
+            LOG.debug(msg)
             return None
         elif len(matches) > 1:
-            raise BrokenAzureDataSource(
+            raise azure_errors.ReportableErrorMediaInvalidOvfEnvXml(
                 "Multiple configuration matches in ovf-exml.xml for %r (%d)"
                 % (name, len(matches))
             )
@@ -1196,12 +1191,12 @@ class OvfEnvXml:
         matches = node.findall("./wa:" + name, OvfEnvXml.NAMESPACES)
         if len(matches) == 0:
             msg = "No ovf-env.xml configuration for %r" % name
-            LOG.debug(msg)
             if required:
-                raise BrokenAzureDataSource(msg)
+                raise azure_errors.ReportableErrorMediaInvalidOvfEnvXml(msg)
+            LOG.debug(msg)
             return default
         elif len(matches) > 1:
-            raise BrokenAzureDataSource(
+            raise azure_errors.ReportableErrorMediaInvalidOvfEnvXml(
                 "Multiple configuration matches in ovf-exml.xml for %r (%d)"
                 % (name, len(matches))
             )
