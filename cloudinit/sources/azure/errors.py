@@ -85,6 +85,7 @@ class ReportableErrorImdsApiVersionUnsupported(ReportableError):
     ) -> None:
         supporting_data = {
             "reason": "server returned API version unsupported",
+            "error": str(error),
             "code": error.code,
             "url": error.url,
             "retries": retries,
@@ -99,7 +100,7 @@ class ReportableErrorImdsConnectionError(ReportableError):
     ) -> None:
         supporting_data = {
             "reason": "exceeded retry limit due to connection errors",
-            "code": error.code,
+            "error": str(error),
             "url": error.url,
             "retries": retries,
             "timeout_seconds": timeout_seconds,
@@ -113,6 +114,7 @@ class ReportableErrorImdsHttpError(ReportableError):
     ) -> None:
         supporting_data = {
             "reason": "exceeded retry limit due to http status",
+            "error": str(error),
             "code": error.code,
             "url": error.url,
             "retries": retries,

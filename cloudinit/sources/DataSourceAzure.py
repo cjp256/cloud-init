@@ -10,6 +10,7 @@ import functools
 import os
 import os.path
 import re
+import traceback
 import xml.etree.ElementTree as ET
 from enum import Enum
 from pathlib import Path
@@ -79,7 +80,7 @@ IMDS_RETRY_CODES = (
 imds_readurl_exception_callback = functools.partial(
     retry_on_url_exc,
     retry_codes=IMDS_RETRY_CODES,
-    retry_instances=(requests.Timeout,),
+    retry_instances=(requests.ConnectionError,requests.Timeout),
 )
 
 
@@ -724,11 +725,17 @@ class DataSourceAzure(sources.DataSource):
                 func=self.crawl_metadata,
             )
         except azure_errors.ReportableError as error:
+            trace = "".join(traceback.format_exception(error))
+            LOG.error(trace)
             self._report_failure(error)
             return False
         except sources.InvalidMetaDataException as error:
+            trace = "".join(traceback.format_exception(error))
+            LOG.error(trace)
             raise
         except Exception as error:
+            trace = "".join(traceback.format_exception(error))
+            LOG.error(trace)
             reportable_error = azure_errors.ReportableErrorCloudInitException(
                 error
             )
@@ -1336,6 +1343,10 @@ class DataSourceAzure(sources.DataSource):
         """
         report_diagnostic_event(
             "Could not crawl Azure metadata: %s" % error,
+            logger_func=LOG.error,
+        )
+        report_diagnostic_event(
+            error.as_description(),
             logger_func=LOG.error,
         )
         if self._is_ephemeral_networking_up():
@@ -2100,6 +2111,9 @@ def _get_metadata_from_imds(
         )
     except UrlError as error:
         # pylint:disable=no-member
+        LOG.error("url error: %s", error)
+        trace = "".join(traceback.format_exception(error))
+        LOG.error(trace)
         if error.code == 400:
             raise azure_errors.ReportableErrorImdsApiVersionUnsupported(
                 error=error,
