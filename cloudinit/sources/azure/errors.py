@@ -41,6 +41,14 @@ class ReportableError(Exception):
         )
 
 
+class ReportableErrorCloudInitTestForcedFailure(ReportableError):
+    def __init__(self) -> None:
+        supporting_data = {
+            "reason": "forced deployment failure for testing purposes"
+        }
+        super().__init__(ReportableErrorCode.CLOUDINIT, supporting_data)
+
+
 class ReportableErrorCloudInitDmiFailure(ReportableError):
     def __init__(self, reason: str) -> None:
         supporting_data = {"reason": reason}
@@ -48,8 +56,7 @@ class ReportableErrorCloudInitDmiFailure(ReportableError):
 
 
 class ReportableErrorCloudInitException(ReportableError):
-    def __init__(self, exception: Exception) -> None:
-        trace = "".join(traceback.format_exception(exception))
+    def __init__(self, exception: Exception, trace: str) -> None:
         trace_base64 = base64.b64encode(trace.encode("utf-8"))
         supporting_data = {
             "reason": "unhandled exception",

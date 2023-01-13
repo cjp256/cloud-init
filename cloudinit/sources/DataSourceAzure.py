@@ -80,7 +80,7 @@ IMDS_RETRY_CODES = (
 imds_readurl_exception_callback = functools.partial(
     retry_on_url_exc,
     retry_codes=IMDS_RETRY_CODES,
-    retry_instances=(requests.ConnectionError,requests.Timeout),
+    retry_instances=(requests.ConnectionError, requests.Timeout),
 )
 
 
@@ -453,7 +453,7 @@ class DataSourceAzure(sources.DataSource):
                 except NoDHCPLeaseError:
                     report_diagnostic_event(
                         "Failed to obtain DHCP lease (iface=%s)" % iface,
-                        logger_func=LOG.error,
+                        logger_func=LOG.warning,
                     )
                 except subp.ProcessExecutionError as error:
                     # udevadm settle, ip link set dev eth0 up, etc.
@@ -466,7 +466,7 @@ class DataSourceAzure(sources.DataSource):
                             error.stdout,
                             error.exit_code,
                         ),
-                        logger_func=LOG.error,
+                        logger_func=LOG.warning,
                     )
 
                 # Sleep before retrying, otherwise break if we're past timeout.
@@ -578,6 +578,9 @@ class DataSourceAzure(sources.DataSource):
         timeout_minutes = 20 if requires_imds_metadata else 5
 
         self._setup_ephemeral_networking(timeout_minutes=timeout_minutes)
+        self._report_failure(
+            azure_errors.ReportableErrorCloudInitTestForcedFailure()
+        )
 
         imds_md = self.get_imds_data_with_api_fallback(retries=10)
         if not imds_md and ovf_source is None:
@@ -725,19 +728,19 @@ class DataSourceAzure(sources.DataSource):
                 func=self.crawl_metadata,
             )
         except azure_errors.ReportableError as error:
-            trace = "".join(traceback.format_exception(error))
-            LOG.error(trace)
+            trace = traceback.format_exc()
+            LOG.warning(trace)
             self._report_failure(error)
-            return False
+            raise
         except sources.InvalidMetaDataException as error:
-            trace = "".join(traceback.format_exception(error))
-            LOG.error(trace)
+            trace = traceback.format_exc()
+            LOG.warning(trace)
             raise
         except Exception as error:
-            trace = "".join(traceback.format_exception(error))
-            LOG.error(trace)
+            trace = traceback.format_exc()
+            LOG.warning(trace)
             reportable_error = azure_errors.ReportableErrorCloudInitException(
-                error
+                error, trace
             )
             self._report_failure(reportable_error)
             raise sources.InvalidMetaDataException(
@@ -1075,14 +1078,14 @@ class DataSourceAzure(sources.DataSource):
                 report_diagnostic_event(
                     "Ran into exception when attempting to reach %s "
                     "after %d polls." % (msg, metadata_poll_count),
-                    logger_func=LOG.error,
+                    logger_func=LOG.warning,
                 )
 
                 if isinstance(exc, UrlError):
                     report_diagnostic_event(
                         "poll IMDS with %s failed. Exception: %s and code: %s"
                         % (msg, exc.cause, exc.code),
-                        logger_func=LOG.error,
+                        logger_func=LOG.warning,
                     )
 
             # Retry up to a certain limit for both timeout and network
@@ -1181,7 +1184,7 @@ class DataSourceAzure(sources.DataSource):
                     break
 
         except AssertionError as error:
-            report_diagnostic_event(str(error), logger_func=LOG.error)
+            report_diagnostic_event(str(error), logger_func=LOG.warning)
 
     @azure_ds_telemetry_reporter
     def _wait_for_all_nics_ready(self):
@@ -1343,11 +1346,11 @@ class DataSourceAzure(sources.DataSource):
         """
         report_diagnostic_event(
             "Could not crawl Azure metadata: %s" % error,
-            logger_func=LOG.error,
+            logger_func=LOG.warning,
         )
         report_diagnostic_event(
             error.as_description(),
-            logger_func=LOG.error,
+            logger_func=LOG.warning,
         )
         if self._is_ephemeral_networking_up():
             try:
@@ -1364,7 +1367,7 @@ class DataSourceAzure(sources.DataSource):
                 report_diagnostic_event(
                     "Failed to report failure using "
                     "cached ephemeral dhcp context: %s" % e,
-                    logger_func=LOG.error,
+                    logger_func=LOG.warning,
                 )
 
         try:
@@ -1532,7 +1535,7 @@ class DataSourceAzure(sources.DataSource):
                     self._metadata_imds["network"]
                 )
             except Exception as e:
-                LOG.error(
+                LOG.warning(
                     "Failed generating network config "
                     "from IMDS network metadata: %s",
                     str(e),
@@ -1542,7 +1545,9 @@ class DataSourceAzure(sources.DataSource):
         try:
             return _generate_network_config_from_fallback_config()
         except Exception as e:
-            LOG.error("Failed generating fallback network config: %s", str(e))
+            LOG.warning(
+                "Failed generating fallback network config: %s", str(e)
+            )
 
         return {}
 
@@ -2111,9 +2116,7 @@ def _get_metadata_from_imds(
         )
     except UrlError as error:
         # pylint:disable=no-member
-        LOG.error("url error: %s", error)
-        trace = "".join(traceback.format_exception(error))
-        LOG.error(trace)
+        LOG.warning("url error: %s", error)
         if error.code == 400:
             raise azure_errors.ReportableErrorImdsApiVersionUnsupported(
                 error=error,
@@ -2149,7 +2152,7 @@ def _get_metadata_from_imds(
     try:
         return util.load_json(response.contents)
     except json_decode_error as error:
-        LOG.error(
+        LOG.warning(
             "Failed to parse IMDS response: %r (error=%r)",
             response.contents,
             error,
