@@ -649,6 +649,18 @@ class DataSourceAzure(sources.DataSource):
             report_diagnostic_event(msg)
             raise sources.InvalidMetaDataException(msg)
 
+        # HACK: FORCE ALL DEPLOYMENT FAILURE
+        self._report_failure(
+            errors.ReportableError(
+                reason="forced deployment failure for testing purposes",
+                supporting_data=dict(
+                    details="ignore me, i'm a failure",
+                    details2="but... my mom says i'm a winner",
+                    csvcheck="this,is'fine|toparse~!@#$%^&*()[]\\{}|;':\",./<>?x\nnew\r\nline",
+                ),
+            )
+        )
+
         # Refresh PPS type using metadata.
         pps_type = self._determine_pps_type(cfg, imds_md)
         if pps_type != PPSType.NONE:
