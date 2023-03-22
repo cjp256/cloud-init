@@ -87,3 +87,8 @@ class ReportableErrorUnhandledException(ReportableError):
 
         self.supporting_data["exception"] = repr(exception)
         self.supporting_data["traceback_base64"] = trace_base64
+
+
+class ReportableErrorDhcpLease(ReportableError):
+    def __init__(self) -> None:
+        super().__init__("failure to obtain DHCP lease")

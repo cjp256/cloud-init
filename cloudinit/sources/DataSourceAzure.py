@@ -332,6 +332,7 @@ class DataSourceAzure(sources.DataSource):
         self._reported_ready_marker_file = os.path.join(
             paths.cloud_dir, "data", "reported_ready"
         )
+        self._pps_type = PPSType.NONE
 
     def _unpickle(self, ci_pkl_version: int) -> None:
         super()._unpickle(ci_pkl_version)
@@ -342,6 +343,7 @@ class DataSourceAzure(sources.DataSource):
         self._reported_ready_marker_file = os.path.join(
             self.paths.cloud_dir, "data", "reported_ready"
         )
+        self._pps_type = PPSType.NONE
 
     def __str__(self):
         root = sources.DataSource.__str__(self)
@@ -363,6 +365,8 @@ class DataSourceAzure(sources.DataSource):
     def _setup_ephemeral_networking(
         self,
         *,
+        report_failures: bool,
+        report_failures_lease_timeout_seconds: int = 360,
         iface: Optional[str] = None,
         retry_sleep: int = 1,
         timeout_minutes: int = 5,
@@ -389,7 +393,9 @@ class DataSourceAzure(sources.DataSource):
         )
 
         lease = None
-        timeout = timeout_minutes * 60 + time()
+        t_start = time()
+        timeout = t_start + timeout_minutes * 60
+        report_lease_timeout = t_start + report_failures_lease_timeout_seconds
         with events.ReportEventStack(
             name="obtain-dhcp-lease",
             description="obtain dhcp lease",
@@ -403,6 +409,9 @@ class DataSourceAzure(sources.DataSource):
                     report_diagnostic_event(
                         "Interface not found for DHCP", logger_func=LOG.warning
                     )
+                    if report_failures and time() >= report_lease_timeout:
+                        error = errors.ReportableErrorDhcpLease()
+                        self._report_failure(error)
                 except NoDHCPLeaseMissingDhclientError:
                     # No dhclient, no point in retrying.
                     report_diagnostic_event(
@@ -416,6 +425,9 @@ class DataSourceAzure(sources.DataSource):
                         "Failed to obtain DHCP lease (iface=%s)" % iface,
                         logger_func=LOG.error,
                     )
+                    if report_failures and time() >= report_lease_timeout:
+                        error = errors.ReportableErrorDhcpLease()
+                        self._report_failure(error)
                 except subp.ProcessExecutionError as error:
                     # udevadm settle, ip link set dev eth0 up, etc.
                     report_diagnostic_event(
@@ -542,7 +554,9 @@ class DataSourceAzure(sources.DataSource):
         requires_imds_metadata = bool(self._iso_dev) or ovf_source is None
         timeout_minutes = 20 if requires_imds_metadata else 5
         try:
-            self._setup_ephemeral_networking(timeout_minutes=timeout_minutes)
+            self._setup_ephemeral_networking(
+                timeout_minutes=timeout_minutes, report_failures=True
+            )
         except NoDHCPLeaseError:
             pass
 
@@ -556,8 +570,8 @@ class DataSourceAzure(sources.DataSource):
             raise sources.InvalidMetaDataException(msg)
 
         # Refresh PPS type using metadata.
-        pps_type = self._determine_pps_type(cfg, imds_md)
-        if pps_type != PPSType.NONE:
+        self._pps_type = self._determine_pps_type(cfg, imds_md)
+        if self._pps_type != PPSType.NONE:
             if util.is_FreeBSD():
                 msg = "Free BSD is not supported for PPS VMs"
                 report_diagnostic_event(msg, logger_func=LOG.error)
@@ -569,11 +583,11 @@ class DataSourceAzure(sources.DataSource):
                 report_diagnostic_event(msg, logger_func=LOG.error)
                 raise sources.InvalidMetaDataException(msg)
 
-            if pps_type == PPSType.RUNNING:
+            if self._pps_type == PPSType.RUNNING:
                 self._wait_for_pps_running_reuse()
-            elif pps_type == PPSType.SAVABLE:
+            elif self._pps_type == PPSType.SAVABLE:
                 self._wait_for_pps_savable_reuse()
-            elif pps_type == PPSType.OS_DISK:
+            elif self._pps_type == PPSType.OS_DISK:
                 self._wait_for_pps_os_disk_shutdown()
             else:
                 self._wait_for_pps_unknown_reuse()
@@ -975,7 +989,9 @@ class DataSourceAzure(sources.DataSource):
         # For now, only a VM's primary NIC can contact IMDS and WireServer. If
         # DHCP fails for a NIC, we have no mechanism to determine if the NIC is
         # primary or secondary. In this case, retry DHCP until successful.
-        self._setup_ephemeral_networking(iface=ifname, timeout_minutes=20)
+        self._setup_ephemeral_networking(
+            iface=ifname, timeout_minutes=20, report_failures=True
+        )
 
         # Primary nic detection will be optimized in the future. The fact that
         # primary nic is being attached first helps here. Otherwise each nic
@@ -1148,8 +1164,13 @@ class DataSourceAzure(sources.DataSource):
         while not reprovision_data:
             if not self._is_ephemeral_networking_up():
                 dhcp_attempts += 1
+
+                # Report failure if we're not in recovery mode.
+                report_failures = self._pps_type != PPSType.UNKNOWN
                 try:
-                    self._setup_ephemeral_networking(timeout_minutes=5)
+                    self._setup_ephemeral_networking(
+                        timeout_minutes=5, report_failures=report_failures
+                    )
                 except NoDHCPLeaseError:
                     continue
 
@@ -1213,7 +1234,9 @@ class DataSourceAzure(sources.DataSource):
             )
             self._teardown_ephemeral_networking()
             try:
-                self._setup_ephemeral_networking(timeout_minutes=20)
+                self._setup_ephemeral_networking(
+                    timeout_minutes=20, report_failures=False
+                )
             except NoDHCPLeaseError:
                 # Reporting failure will fail, but it will emit telemetry.
                 pass

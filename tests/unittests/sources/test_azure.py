@@ -3246,7 +3246,9 @@ class TestEphemeralNetworking:
         }
         mock_ephemeral_dhcp_v4.return_value.obtain_lease.side_effect = [lease]
 
-        azure_ds._setup_ephemeral_networking(iface=iface)
+        azure_ds._setup_ephemeral_networking(
+            iface=iface, report_failures=False
+        )
 
         assert mock_ephemeral_dhcp_v4.mock_calls == [
             mock.call(
@@ -3272,7 +3274,9 @@ class TestEphemeralNetworking:
         }
         mock_ephemeral_dhcp_v4.return_value.obtain_lease.side_effect = [lease]
 
-        azure_ds._setup_ephemeral_networking(iface=iface)
+        azure_ds._setup_ephemeral_networking(
+            iface=iface, report_failures=False
+        )
 
         assert mock_ephemeral_dhcp_v4.mock_calls == [
             mock.call(
@@ -3296,7 +3300,7 @@ class TestEphemeralNetworking:
         ]
 
         with pytest.raises(dhcp.NoDHCPLeaseMissingDhclientError):
-            azure_ds._setup_ephemeral_networking()
+            azure_ds._setup_ephemeral_networking(report_failures=False)
 
         assert azure_ds._ephemeral_dhcp_ctx is None
 
@@ -3314,7 +3318,7 @@ class TestEphemeralNetworking:
             lease,
         ]
 
-        azure_ds._setup_ephemeral_networking()
+        azure_ds._setup_ephemeral_networking(report_failures=False)
 
         assert mock_ephemeral_dhcp_v4.mock_calls == [
             mock.call(
@@ -3348,7 +3352,7 @@ class TestEphemeralNetworking:
             lease,
         ]
 
-        azure_ds._setup_ephemeral_networking()
+        azure_ds._setup_ephemeral_networking(report_failures=False)
 
         assert mock_ephemeral_dhcp_v4.mock_calls == [
             mock.call(
@@ -3384,7 +3388,7 @@ class TestEphemeralNetworking:
             error_class()
         ] * 10 + [lease]
 
-        azure_ds._setup_ephemeral_networking()
+        azure_ds._setup_ephemeral_networking(report_failures=False)
 
         assert (
             mock_ephemeral_dhcp_v4.mock_calls
@@ -3426,13 +3430,67 @@ class TestEphemeralNetworking:
         ]
 
         with pytest.raises(dhcp.NoDHCPLeaseError):
-            azure_ds._setup_ephemeral_networking(timeout_minutes=3)
+            azure_ds._setup_ephemeral_networking(
+                timeout_minutes=3, report_failures=False
+            )
 
         assert (
             mock_ephemeral_dhcp_v4.return_value.mock_calls
             == [mock.call.obtain_lease()] * 3
         )
         assert mock_sleep.mock_calls == [mock.call(1)] * 2
+        assert azure_ds._wireserver_endpoint == "168.63.129.16"
+        assert azure_ds._ephemeral_dhcp_ctx is None
+
+    @pytest.mark.parametrize(
+        "error_class", [dhcp.NoDHCPLeaseInterfaceError, dhcp.NoDHCPLeaseError]
+    )
+    def test_retry_reports_failure(
+        self,
+        azure_ds,
+        mock_ephemeral_dhcp_v4,
+        mock_sleep,
+        mock_time,
+        error_class,
+    ):
+        mock_time.side_effect = [
+            0.0,  # start
+            60.1,  # report_failures check
+            60.1,  # timeout check
+            90.1,  # report_failures check
+            90.1,  # timeout check
+            120.1,  # report_failures check
+            120.1,  # timeout check
+            300.1,  # report_failures check
+            300.1,  # timeout check
+            360.1,  # report_failures check
+            360.1,  # timeout check
+        ]
+        mock_ephemeral_dhcp_v4.return_value.obtain_lease.side_effect = [
+            error_class()
+        ] * 10 + [
+            {
+                "interface": "fakeEth0",
+            }
+        ]
+
+        with mock.patch.object(
+            azure_ds,
+            "_report_failure",
+        ) as mock_report_failure:
+            with pytest.raises(dhcp.NoDHCPLeaseError):
+                azure_ds._setup_ephemeral_networking(
+                    timeout_minutes=6,
+                    report_failures=True,
+                    report_failures_lease_timeout_seconds=120,
+                )
+
+        assert len(mock_report_failure.mock_calls) == 3
+        assert (
+            mock_ephemeral_dhcp_v4.return_value.mock_calls
+            == [mock.call.obtain_lease()] * 5
+        )
+        assert mock_sleep.mock_calls == [mock.call(1)] * 4
         assert azure_ds._wireserver_endpoint == "168.63.129.16"
         assert azure_ds._ephemeral_dhcp_ctx is None
 
@@ -3553,7 +3611,7 @@ class TestProvisioning:
 
         # Verify DHCP is setup once.
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20)
+            mock.call(timeout_minutes=20, report_failures=True)
         ]
         assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == [
             mock.call(
@@ -3641,8 +3699,8 @@ class TestProvisioning:
 
         # Verify DHCP is setup twice.
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20),
-            mock.call(timeout_minutes=5),
+            mock.call(timeout_minutes=20, report_failures=True),
+            mock.call(timeout_minutes=5, report_failures=True),
         ]
         assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == [
             mock.call(
@@ -3760,8 +3818,10 @@ class TestProvisioning:
 
         # Verify DHCP is setup twice.
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20),
-            mock.call(iface="ethAttached1", timeout_minutes=20),
+            mock.call(timeout_minutes=20, report_failures=True),
+            mock.call(
+                iface="ethAttached1", timeout_minutes=20, report_failures=True
+            ),
         ]
         assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == [
             mock.call(
@@ -3917,8 +3977,10 @@ class TestProvisioning:
 
         # Verify DHCP is setup twice.
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20),
-            mock.call(iface="ethAttached1", timeout_minutes=20),
+            mock.call(timeout_minutes=20, report_failures=True),
+            mock.call(
+                iface="ethAttached1", timeout_minutes=20, report_failures=True
+            ),
         ]
         assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == [
             mock.call(
@@ -4022,7 +4084,7 @@ class TestProvisioning:
 
         # Verify DHCP is setup once.
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20),
+            mock.call(timeout_minutes=20, report_failures=True),
         ]
         assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == [
             mock.call(
@@ -4079,7 +4141,7 @@ class TestProvisioning:
         assert m_report.mock_calls == [mock.call(mock.ANY)]
 
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20),
+            mock.call(timeout_minutes=20, report_failures=True),
         ]
         assert self.mock_readurl.mock_calls == []
         assert self.mock_azure_get_metadata_from_fabric.mock_calls == []
@@ -4125,7 +4187,7 @@ class TestProvisioning:
 
         # Verify DHCP is setup once.
         assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
-            mock.call(timeout_minutes=20)
+            mock.call(timeout_minutes=20, report_failures=True)
         ]
         assert self.mock_net_dhcp_maybe_perform_dhcp_discovery.mock_calls == [
             mock.call(
