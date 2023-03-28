@@ -92,3 +92,8 @@ class ReportableErrorUnhandledException(ReportableError):
 class ReportableErrorDhcpLease(ReportableError):
     def __init__(self) -> None:
         super().__init__("failure to obtain DHCP lease")
+
+
+class ReportableErrorImageMissingDhclient(ReportableError):
+    def __init__(self) -> None:
+        super().__init__("image missing dhclient executable")

@@ -412,13 +412,13 @@ class DataSourceAzure(sources.DataSource):
                     if report_failures and time() >= report_lease_timeout:
                         error = errors.ReportableErrorDhcpLease()
                         self._report_failure(error)
-                except NoDHCPLeaseMissingDhclientError:
+                except NoDHCPLeaseMissingDhclientError as error:
                     # No dhclient, no point in retrying.
                     report_diagnostic_event(
                         "dhclient executable not found", logger_func=LOG.error
                     )
                     self._ephemeral_dhcp_ctx = None
-                    raise
+                    raise errors.ReportableErrorImageMissingDhclient() from error
                 except NoDHCPLeaseError:
                     # Typical DHCP failure, continue after sleeping 1 second.
                     report_diagnostic_event(

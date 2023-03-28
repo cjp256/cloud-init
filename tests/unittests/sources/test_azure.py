@@ -3299,7 +3299,7 @@ class TestEphemeralNetworking:
             dhcp.NoDHCPLeaseMissingDhclientError
         ]
 
-        with pytest.raises(dhcp.NoDHCPLeaseMissingDhclientError):
+        with pytest.raises(errors.ReportableErrorImageMissingDhclient):
             azure_ds._setup_ephemeral_networking(report_failures=False)
 
         assert azure_ds._ephemeral_dhcp_ctx is None
@@ -4214,6 +4214,25 @@ class TestProvisioning:
         # boot will behave like a typical provisioning boot.
         assert self.patched_reported_ready_marker_path.exists() is False
         assert self.wrapped_util_write_file.mock_calls == []
+
+    def test_errors_image_missing_dhclient(self):
+        self.mock_net_dhcp_maybe_perform_dhcp_discovery.side_effect = [
+            dhcp.NoDHCPLeaseMissingDhclientError()
+        ]
+
+        with mock.patch.object(self.azure_ds, "_report_failure") as m_report:
+            self.azure_ds._get_data()
+
+        error = errors.ReportableErrorImageMissingDhclient()
+        error.timestamp = mock.ANY
+
+        assert m_report.mock_calls == [mock.call(error)]
+        assert self.mock_wrapping_setup_ephemeral_networking.mock_calls == [
+            mock.call(timeout_minutes=20, report_failures=True),
+        ]
+        assert self.mock_readurl.mock_calls == []
+        assert self.mock_azure_get_metadata_from_fabric.mock_calls == []
+        assert self.mock_netlink.mock_calls == []
 
 
 class TestValidateIMDSMetadata:
