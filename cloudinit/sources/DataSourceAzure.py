@@ -686,7 +686,9 @@ class DataSourceAzure(sources.DataSource):
         return crawled_data
 
     @azure_ds_telemetry_reporter
-    def get_metadata_from_imds(self, retries: int = 10) -> Dict:
+    def get_metadata_from_imds(
+        self, retries: int = 10, *, report_failure: bool = True
+    ) -> Dict:
         try:
             return imds.fetch_metadata_with_api_fallback(retries=retries)
         except (UrlError, ValueError) as error:
@@ -694,6 +696,20 @@ class DataSourceAzure(sources.DataSource):
                 "Ignoring IMDS metadata due to: %s" % error,
                 logger_func=LOG.warning,
             )
+
+            if report_failure:
+                if isinstance(error, UrlError):
+                    report = errors.ReportableErrorImdsUrlError(
+                        exception=error, retries=retries
+                    )
+                else:
+                    report = (
+                        errors.ReportableErrorImdsMetadataParsingException(
+                            exception=error
+                        )
+                    )
+
+                self._report_failure(report)
             return {}
 
     def clear_cached_attrs(self, attr_defaults=()):
@@ -996,7 +1012,9 @@ class DataSourceAzure(sources.DataSource):
         # Primary nic detection will be optimized in the future. The fact that
         # primary nic is being attached first helps here. Otherwise each nic
         # could add several seconds of delay.
-        imds_md = self.get_metadata_from_imds(retries=300)
+        imds_md = self.get_metadata_from_imds(
+            retries=300, report_failure=False
+        )
         if imds_md:
             # Only primary NIC will get a response from IMDS.
             LOG.info("%s is the primary nic", ifname)
