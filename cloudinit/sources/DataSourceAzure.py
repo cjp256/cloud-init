@@ -25,7 +25,7 @@ from cloudinit.net.dhcp import (
     NoDHCPLeaseMissingDhclientError,
 )
 from cloudinit.net.ephemeral import EphemeralDHCPv4
-from cloudinit.reporting import events
+from cloudinit.reporting import available_handlers, events
 from cloudinit.sources.azure import errors, identity, imds
 from cloudinit.sources.helpers import netlink
 from cloudinit.sources.helpers.azure import (
@@ -1173,6 +1173,13 @@ class DataSourceAzure(sources.DataSource):
             logger_func=LOG.debug,
         )
         return reprovision_data
+
+    @azure_ds_telemetry_reporter
+    def _report_failure_to_host(self, error: errors.ReportableError) -> None:
+        """Report failure to host via well-known key."""
+        value = error.as_description()
+        kvp_handler = available_handlers.registered_items["hyperv"]
+        kvp_handler.write("PROVISIONING_REPORT", value)
 
     @azure_ds_telemetry_reporter
     def _report_failure(self, error: errors.ReportableError) -> bool:
