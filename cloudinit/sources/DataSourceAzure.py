@@ -547,6 +547,15 @@ class DataSourceAzure(sources.DataSource):
         except NoDHCPLeaseError:
             pass
 
+        import json
+
+        json_string = json.dumps({"foo": "bar"})
+        supporting_data = {"extra": "stuff", "jsonstr": json_string}
+        error = errors.ReportableError(
+            reason="testing", supporting_data=supporting_data
+        )
+        self._report_failure_to_host(error)
+
         imds_md = {}
         if self._is_ephemeral_networking_up():
             imds_md = self.get_metadata_from_imds()
