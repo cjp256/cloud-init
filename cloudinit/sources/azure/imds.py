@@ -171,34 +171,3 @@ def fetch_metadata_with_api_fallback(retry_deadline: float) -> Dict:
             return _fetch_metadata(url, retry_deadline=retry_deadline)
         raise
 
-
-def fetch_reprovision_data() -> bytes:
-    """Fetch extended metadata, falling back to non-extended as required.
-
-    :raises UrlError: on error.
-    """
-    url = IMDS_URL + "/reprovisiondata?api-version=2019-06-01"
-
-    handler = ReadUrlRetryHandler(
-        logging_backoff=2.0,
-        max_connection_errors=0,
-        retry_codes=(
-            404,
-            410,
-        ),
-        retry_deadline=None,
-    )
-    response = readurl(
-        url,
-        exception_cb=handler.exception_callback,
-        headers={"Metadata": "true"},
-        infinite=True,
-        log_req_resp=False,
-        timeout=30,
-    )
-
-    report_diagnostic_event(
-        f"Polled IMDS {handler._request_count+1} time(s)",
-        logger_func=LOG.debug,
-    )
-    return response.contents
