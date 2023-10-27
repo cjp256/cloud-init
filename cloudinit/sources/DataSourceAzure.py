@@ -671,6 +671,9 @@ class DataSourceAzure(sources.DataSource):
         # Report errors if IMDS network configuration is missing data.
         self.validate_imds_network_metadata(imds_md=imds_md)
 
+        # Report errors if IMDS compute configuration is missing
+        self.validate_imds_compute_metadata(imds_md=imds_md)
+
         self.seed = ovf_source or "IMDS"
         crawled_data.update(
             {
@@ -1552,6 +1555,37 @@ class DataSourceAzure(sources.DataSource):
             )
 
         return False
+
+    @azure_ds_telemetry_reporter
+    def validate_imds_compute_metadata(self, imds_md: dict) -> bool:
+        # validate imds pps metadata
+        imds_ppstype = self._ppstype_from_imds(imds_md)
+        if imds_ppstype != PPSType.NONE.value:
+            self._report_failure(
+                errors.ReportableErrorImdsInvalidMetadata(
+                    key="extended.compute.ppsType", value=None
+                )
+            )
+            return False
+
+        # validate imds compute metadata
+        imds_compute = imds_md.get("compute")
+        if not imds_compute:
+            self._report_failure(
+                errors.ReportableErrorImdsInvalidMetadata(
+                    key="compute", value=None
+                )
+            )
+            return False
+        else:
+            if not imds_compute.get("osProfile"):
+                self._report_failure(
+                    errors.ReportableErrorImdsInvalidMetadata(
+                        key="compute.osProfile", value=None
+                    )
+                )
+                return False
+        return True
 
 
 def _username_from_imds(imds_data):
