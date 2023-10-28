@@ -1563,28 +1563,28 @@ class DataSourceAzure(sources.DataSource):
         if imds_ppstype != PPSType.NONE.value:
             self._report_failure(
                 errors.ReportableErrorImdsInvalidMetadata(
-                    key="extended.compute.ppsType", value=None
+                    key="extended.compute.ppsType", value=imds_ppstype
                 )
             )
             return False
 
         # validate imds compute metadata
-        imds_compute = imds_md.get("compute")
-        if not imds_compute:
+        try:
+            imds_compute = imds_md["compute"]
+        except KeyError:
             self._report_failure(
                 errors.ReportableErrorImdsInvalidMetadata(
                     key="compute", value=None
                 )
             )
             return False
-        else:
-            if not imds_compute.get("osProfile"):
-                self._report_failure(
-                    errors.ReportableErrorImdsInvalidMetadata(
-                        key="compute.osProfile", value=None
-                    )
+        if not imds_compute.get("osProfile"):
+            self._report_failure(
+                errors.ReportableErrorImdsInvalidMetadata(
+                    key="compute.osProfile", value=None
                 )
-                return False
+            )
+            return False
         return True
 
 

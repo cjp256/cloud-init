@@ -4478,6 +4478,7 @@ class TestValidateIMDSMetadata:
         imds_md = {}
 
         assert azure_ds.validate_imds_network_metadata(imds_md) is False
+        assert azure_ds.validate_imds_compute_metadata(imds_md) is False
         assert (
             "cloudinit.sources.DataSourceAzure",
             30,
@@ -4671,6 +4672,96 @@ class TestValidateIMDSMetadata:
         }
 
         assert azure_ds.validate_imds_network_metadata(imds_md) is False
+
+    def test_missing_compute(self, azure_ds):
+        imds_md = {
+            "network": {
+                "interface": [
+                    {
+                        "ipv4": {
+                            "ipAddress": [
+                                {
+                                    "privateIpAddress": "10.0.1.4",
+                                    "publicIpAddress": "",
+                                }
+                            ],
+                            "subnet": [
+                                {"address": "10.0.1.0", "prefix": "24"}
+                            ],
+                        },
+                        "ipv6": {"ipAddress": []},
+                        "macAddress": "000D3A8ABA31",
+                    },
+                    {
+                        "ipv4": {
+                            "ipAddress": [
+                                {
+                                    "privateIpAddress": "10.0.2.4",
+                                    "publicIpAddress": "",
+                                },
+                                {
+                                    "privateIpAddress": "10.0.2.5",
+                                    "publicIpAddress": "",
+                                },
+                            ],
+                            "subnet": [
+                                {"address": "10.0.2.0", "prefix": "24"}
+                            ],
+                        },
+                        "ipv6": {"ipAddress": []},
+                        "macAddress": "000D3A8AB397",
+                    },
+                ]
+            },
+            "extended": {
+                "compute": {"hasCustomData": False, "ppsType": "None"}
+            },
+        }
+        assert azure_ds.validate_imds_compute_metadata(imds_md) is False
+
+    def test_missing_osProfile(self, azure_ds):
+        imds_md = {
+            "compute": {
+                "azEnvironment": "AzurePublicCloud",
+                "osType": "Linux",
+                "publisher": "Canonical",
+            },
+            "extended": {
+                "compute": {"hasCustomData": False, "ppsType": "None"}
+            },
+        }
+        assert azure_ds.validate_imds_compute_metadata(imds_md) is False
+
+    def test_stale_pps_data(self, azure_ds):
+        imds_md = {
+            "compute": {
+                "azEnvironment": "AzurePublicCloud",
+                "osType": "Linux",
+                "publisher": "Canonical",
+            },
+            "extended": {
+                "compute": {"hasCustomData": False, "ppsType": "PPS"}
+            },
+        }
+        assert azure_ds.validate_imds_compute_metadata(imds_md) is False
+
+    def test_validates_compute_metadata(self, azure_ds):
+        imds_md = {
+            "compute": {
+                "azEnvironment": "AzurePublicCloud",
+                "osProfile": {
+                    "adminUsername": "ksstanoj",
+                    "computerName": "ksstanoj-2380",
+                    "disablePasswordAuthentication": "true",
+                },
+                "osType": "Linux",
+                "publisher": "Canonical",
+            },
+            "extended": {
+                "compute": {"hasCustomData": False, "ppsType": "None"}
+            },
+        }
+        assert azure_ds.validate_imds_compute_metadata(imds_md) is True
 
 
 class TestDependencyFallback:
