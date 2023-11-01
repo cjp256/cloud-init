@@ -765,12 +765,16 @@ class DataSourceAzure(sources.DataSource):
         # which may not enable IMDS, don't report IMDS failures to wireserver.
         if not self._route_configured_for_imds:
             report_failure = False
+            max_connection_errors = 11
+        else:
+            max_connection_errors = None
 
         error_string: Optional[str] = None
         error_report: Optional[errors.ReportableError] = None
         try:
             return imds.fetch_metadata_with_api_fallback(
-                retry_deadline=retry_deadline
+                max_connection_errors=max_connection_errors,
+                retry_deadline=retry_deadline,
             )
         except UrlError as error:
             error_string = str(error)
