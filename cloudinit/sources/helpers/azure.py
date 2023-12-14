@@ -811,6 +811,7 @@ class WALinuxAgentShim:
             GoalState.
         @return: The list of user's authorized pubkey values.
         """
+        report_diagnostic_event("foobar", logger_func=LOG.debug)
         http_client_certificate = None
         if self.openssl_manager is None and pubkey_info is not None:
             self.openssl_manager = OpenSSLManager()
@@ -832,7 +833,7 @@ class WALinuxAgentShim:
         if iso_dev is not None:
             self.eject_iso(iso_dev)
 
-        health_reporter.send_ready_signal()
+        # health_reporter.send_ready_signal()
         return ssh_keys
 
     @azure_ds_telemetry_reporter

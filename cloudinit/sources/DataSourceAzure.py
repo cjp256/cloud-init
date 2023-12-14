@@ -1366,6 +1366,7 @@ class DataSourceAzure(sources.DataSource):
         :returns: List of SSH keys, if requested.
         """
         kvp.report_success_to_host()
+        return []
 
         try:
             data = get_metadata_from_fabric(
