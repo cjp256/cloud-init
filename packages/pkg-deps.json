@@ -1,4 +1,22 @@
 {
+   "azurelinux" : {
+      "renames" : {
+         "pyyaml" : "PyYAML"
+      },
+      "build-requires" : [
+         "fdupes",
+         "filesystem",
+         "python3-devel",
+         "python3-setuptools"
+      ],
+      "requires" : [
+         "iproute2",
+         "e2fsprogs",
+         "net-tools",
+         "procps",
+         "sudo"
+      ]
+   },
    "debian" : {
       "build-requires" : [
          "debhelper",
