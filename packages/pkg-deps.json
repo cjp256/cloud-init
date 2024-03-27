@@ -1,7 +1,7 @@
 {
    "azurelinux" : {
       "renames" : {
-         "python3-pyyaml" : "PyYAML"
+         "pyyaml" : "PyYAML"
       },
       "build-requires" : [
          "fdupes",
