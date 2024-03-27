@@ -23,6 +23,7 @@ DEFAULT_REQUIREMENTS = "requirements.txt"
 
 # Map the appropriate package dir needed for each distro choice
 DISTRO_PKG_TYPE_MAP = {
+    "azurelinux": "redhat",
     "centos": "redhat",
     "eurolinux": "redhat",
     "miraclelinux": "redhat",
@@ -340,6 +341,7 @@ def pkg_install(pkg_list, distro, test_distro=False, dry_run=False):
         # CentOS and Redhat need epel-release to access oauthlib and jsonschema
         subprocess.check_call(install_cmd + ["epel-release"])
     if distro in [
+        "azurelinux",
         "suse",
         "opensuse",
         "redhat",
