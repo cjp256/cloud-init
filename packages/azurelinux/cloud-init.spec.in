@@ -12,52 +12,19 @@ Source0:        {{archive_name}}
 BuildArch:      noarch
 BuildRoot:      %{_tmppath}
 
-BuildRequires:  automake
-BuildRequires:  dbus
-BuildRequires:  iproute
-BuildRequires:  azurelinux-release 
-BuildRequires:  python3
-BuildRequires:  python3-PyYAML
-BuildRequires:  python3-certifi
-BuildRequires:  python3-chardet
-BuildRequires:  python3-configobj
-BuildRequires:  python3-idna
-BuildRequires:  python3-ipaddr
-BuildRequires:  python3-jinja2
-BuildRequires:  python3-libs
-BuildRequires:  python3-requests
-BuildRequires:  python3-setuptools
-BuildRequires:  python3-six
-BuildRequires:  python3-xml
+{% for r in buildrequires %}
+BuildRequires:  {{r}}
+{% endfor %}
+
 BuildRequires:  systemd
 BuildRequires:  systemd-devel
-Requires:       dhcp-client
-Requires:       e2fsprogs
-Requires:       iproute
-Requires:       net-tools
-Requires:       python3
-Requires:       python3-PyYAML
-Requires:       python3-configobj
-Requires:       python3-jinja2
-Requires:       python3-jsonpatch
-Requires:       python3-jsonschema
-Requires:       python3-libs
-Requires:       python3-markupsafe
-Requires:       python3-netifaces
-Requires:       python3-oauthlib
-Requires:       python3-prettytable
-Requires:       python3-requests
-Requires:       python3-setuptools
-Requires:       python3-six
-Requires:       python3-xml
-Requires:       systemd
-%if 0%{?with_check}
-BuildRequires:  python3-configobj
-BuildRequires:  python3-jsonpatch
-BuildRequires:  python3-pip
-BuildRequires:  python3-pytest
-BuildRequires:  shadow-utils
-%endif
+
+# Install 'dynamic' runtime reqs from *requirements.txt and pkg-deps.json.
+# Install them as BuildRequires too as they're used for testing.
+{% for r in requires %}
+BuildRequires:  {{r}}
+Requires:       {{r}}
+{% endfor %}
 
 Requires(post):       systemd
 Requires(preun):      systemd
