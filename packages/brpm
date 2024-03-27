@@ -124,7 +124,7 @@ def main():
         help="select distro (default: %(default)s)",
         metavar="DISTRO",
         default="redhat",
-        choices=("redhat", "suse"),
+        choices=("azurelinux", "redhat", "suse"),
     )
     parser.add_argument(
         "--srpm", help="Produce a source rpm", action="store_true"
