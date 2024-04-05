@@ -1221,6 +1221,7 @@ class OvfEnvXml:
         self.provision_guest_proxy_agent = self._parse_property(
             platform_settings,
             "ProvisionGuestProxyAgent",
+            parse_bool=True,
             default=False,
             required=False,
         )
