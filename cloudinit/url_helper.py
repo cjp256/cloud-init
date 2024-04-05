@@ -242,7 +242,6 @@ def readurl(
     :param stream: if False, the response content will be immediately
     downloaded.
     """
-    create_sessions = session is None
     url = _cleanurl(url)
     req_args = {
         "url": url,
@@ -282,6 +281,9 @@ def readurl(
     if sec_between is None:
         sec_between = -1
 
+    if session is None:
+        session = requests.Session()
+
     # Handle retrying ourselves since the built-in support
     # doesn't handle sleeping between tries...
     for i in count():
@@ -308,11 +310,7 @@ def readurl(
                     filtered_req_args,
                 )
 
-            if create_sessions:
-                session = requests.Session()
-
-            with session as sess:
-                r = sess.request(**req_args)
+            r = session.request(**req_args)
 
             if check_status:
                 r.raise_for_status()
