@@ -6,9 +6,11 @@
 
 import base64
 import functools
+import json
 import logging
 import os
 import os.path
+import zipfile
 import re
 import socket
 import xml.etree.ElementTree as ET  # nosec B405
@@ -855,10 +857,15 @@ class DataSourceAzure(sources.DataSource):
         error_string: Optional[str] = None
         error_report: Optional[errors.ReportableError] = None
         try:
-            return imds.fetch_metadata_with_api_fallback(
+            md = imds.fetch_metadata_with_api_fallback(
                 max_connection_errors=max_connection_errors,
                 retry_deadline=retry_deadline,
             )
+            Path("/run/cloud-init/imds.json").write_text(
+                json.dumps(md, indent=2)
+            )
+            LOG.error("Fetched IMDS metadata: %s", json.dumps(md, indent=2))
+            return md
         except UrlError as error:
             error_string = str(error)
             duration = monotonic() - start_time
@@ -1530,6 +1537,7 @@ class DataSourceAzure(sources.DataSource):
             description="read azure ovf during reprovisioning",
             parent=azure_ds_reporter,
         ):
+            Path("/run/cloud-init/ovf-env.xml-reprovision").write_bytes(contents)
             md, ud, cfg = read_azure_ovf(contents)
             return (md, ud, cfg, {"ovf-env.xml": contents})
 
@@ -1947,6 +1955,8 @@ def read_azure_ovf(contents):
     :raises errors.ReportableError: if XML is unparsable or invalid.
     """
     ovf_env = OvfEnvXml.parse_text(contents)
+    LOG.error("Reading ovf-env.xml: %s", contents.decode("utf-8", "ignore"))
+
     md: Dict[str, Any] = {}
     cfg = {}
     ud = ovf_env.custom_data or ""
@@ -2054,6 +2064,39 @@ def load_azure_ds_dir(source_dir):
 
     with performance.Timed("Reading ovf-env.xml"), open(ovf_file, "rb") as fp:
         contents = fp.read()
+
+    Path("/run/cloud-init/ovf-env.xml").write_bytes(contents)
+
+    # Capture full provisioning media contents to a zip for analysis.
+    # The media is only mounted briefly during datasource setup, so
+    # this must happen here before mount_cb unmounts it.
+    # Save to both /run (tmpfs, quick access) and /var/log/azure (persistent).
+    capture_dir = Path("/run/cloud-init/ovf-media")
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = capture_dir / "ovf-media.zip"
+    persist_dir = Path("/var/log/azure")
+    persist_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        with zipfile.ZipFile(
+            str(zip_path), "w", zipfile.ZIP_DEFLATED
+        ) as zf:
+            for root, _dirs, files in os.walk(source_dir):
+                for fname in files:
+                    fpath = os.path.join(root, fname)
+                    arcname = os.path.relpath(fpath, source_dir)
+                    zf.write(fpath, arcname)
+        import shutil
+
+        shutil.copy2(str(zip_path), str(persist_dir / "ovf-media.zip"))
+        LOG.info(
+            "Captured provisioning media to %s (%d bytes)",
+            zip_path,
+            zip_path.stat().st_size,
+        )
+    except Exception:
+        LOG.warning(
+            "Failed to capture provisioning media", exc_info=True
+        )
 
     md, ud, cfg = read_azure_ovf(contents)
     return (md, ud, cfg, {"ovf-env.xml": contents})

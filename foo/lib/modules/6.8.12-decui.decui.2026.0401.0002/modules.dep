@@ -1,0 +1,63 @@
+kernel/arch/x86/crypto/aesni-intel.ko: kernel/crypto/crypto_simd.ko kernel/crypto/cryptd.ko
+kernel/arch/x86/crypto/sha1-ssse3.ko:
+kernel/arch/x86/crypto/sha256-ssse3.ko:
+kernel/arch/x86/crypto/ghash-clmulni-intel.ko: kernel/crypto/cryptd.ko
+kernel/arch/x86/crypto/polyval-clmulni.ko: kernel/crypto/polyval-generic.ko
+kernel/arch/x86/crypto/crc32-pclmul.ko:
+kernel/arch/x86/crypto/crct10dif-pclmul.ko:
+kernel/arch/x86/kvm/kvm.ko: kernel/virt/lib/irqbypass.ko
+kernel/arch/x86/kvm/kvm-amd.ko: kernel/drivers/crypto/ccp/ccp.ko kernel/arch/x86/kvm/kvm.ko kernel/virt/lib/irqbypass.ko
+kernel/kernel/configs.ko:
+kernel/fs/nls/nls_iso8859-1.ko:
+kernel/fs/binfmt_misc.ko:
+kernel/fs/autofs/autofs4.ko:
+kernel/crypto/cryptd.ko:
+kernel/crypto/polyval-generic.ko:
+kernel/crypto/crypto_simd.ko: kernel/crypto/cryptd.ko
+kernel/lib/libcrc32c.ko:
+kernel/drivers/macintosh/mac_hid.ko:
+kernel/drivers/scsi/device_handler/scsi_dh_rdac.ko:
+kernel/drivers/scsi/device_handler/scsi_dh_emc.ko:
+kernel/drivers/scsi/device_handler/scsi_dh_alua.ko:
+kernel/drivers/nvme/host/nvme-fabrics.ko:
+kernel/drivers/nvme/host/nvme-rdma.ko: kernel/drivers/nvme/host/nvme-fabrics.ko kernel/drivers/infiniband/core/rdma_cm.ko kernel/drivers/infiniband/core/iw_cm.ko kernel/drivers/infiniband/core/ib_cm.ko kernel/drivers/infiniband/core/ib_core.ko
+kernel/drivers/gpu/drm/hyperv/hyperv_drm.ko:
+kernel/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.ko: kernel/drivers/net/ethernet/mellanox/mlxfw/mlxfw.ko kernel/net/tls/tls.ko kernel/net/psample/psample.ko
+kernel/drivers/net/ethernet/mellanox/mlxfw/mlxfw.ko:
+kernel/drivers/net/macsec.ko:
+kernel/drivers/net/hyperv/hv_netvsc.ko:
+kernel/drivers/input/serio/serio_raw.ko:
+kernel/drivers/input/serio/hyperv-keyboard.ko:
+kernel/drivers/input/joydev.ko:
+kernel/drivers/md/dm-multipath.ko:
+kernel/drivers/md/dm-round-robin.ko: kernel/drivers/md/dm-multipath.ko
+kernel/drivers/firmware/efi/efi-pstore.ko:
+kernel/drivers/crypto/ccp/ccp.ko:
+kernel/drivers/hid/hid.ko:
+kernel/drivers/hid/hid-generic.ko: kernel/drivers/hid/hid.ko
+kernel/drivers/hid/hid-hyperv.ko: kernel/drivers/hid/hid.ko
+kernel/drivers/virt/vmgenid.ko:
+kernel/drivers/powercap/intel_rapl_common.ko:
+kernel/drivers/powercap/intel_rapl_msr.ko: kernel/drivers/powercap/intel_rapl_common.ko
+kernel/drivers/infiniband/core/ib_core.ko:
+kernel/drivers/infiniband/core/ib_cm.ko: kernel/drivers/infiniband/core/ib_core.ko
+kernel/drivers/infiniband/core/iw_cm.ko: kernel/drivers/infiniband/core/ib_core.ko
+kernel/drivers/infiniband/core/rdma_cm.ko: kernel/drivers/infiniband/core/iw_cm.ko kernel/drivers/infiniband/core/ib_cm.ko kernel/drivers/infiniband/core/ib_core.ko
+kernel/drivers/infiniband/core/ib_uverbs.ko: kernel/drivers/infiniband/core/ib_core.ko
+kernel/drivers/infiniband/core/rdma_ucm.ko: kernel/drivers/infiniband/core/ib_uverbs.ko kernel/drivers/infiniband/core/rdma_cm.ko kernel/drivers/infiniband/core/iw_cm.ko kernel/drivers/infiniband/core/ib_cm.ko kernel/drivers/infiniband/core/ib_core.ko
+kernel/drivers/infiniband/hw/mlx5/mlx5_ib.ko: kernel/drivers/net/macsec.ko kernel/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.ko kernel/drivers/net/ethernet/mellanox/mlxfw/mlxfw.ko kernel/net/tls/tls.ko kernel/net/psample/psample.ko kernel/drivers/infiniband/core/ib_uverbs.ko kernel/drivers/infiniband/core/ib_core.ko
+kernel/net/sched/sch_fq_codel.ko:
+kernel/net/netfilter/nfnetlink.ko:
+kernel/net/netfilter/nf_conntrack.ko: kernel/net/ipv6/netfilter/nf_defrag_ipv6.ko kernel/net/ipv4/netfilter/nf_defrag_ipv4.ko kernel/lib/libcrc32c.ko
+kernel/net/netfilter/nf_tables.ko: kernel/lib/libcrc32c.ko kernel/net/netfilter/nfnetlink.ko
+kernel/net/netfilter/nft_compat.ko: kernel/net/netfilter/x_tables.ko kernel/net/netfilter/nf_tables.ko kernel/lib/libcrc32c.ko kernel/net/netfilter/nfnetlink.ko
+kernel/net/netfilter/x_tables.ko:
+kernel/net/netfilter/xt_tcpudp.ko: kernel/net/netfilter/x_tables.ko
+kernel/net/netfilter/xt_conntrack.ko: kernel/net/netfilter/nf_conntrack.ko kernel/net/ipv6/netfilter/nf_defrag_ipv6.ko kernel/net/ipv4/netfilter/nf_defrag_ipv4.ko kernel/net/netfilter/x_tables.ko kernel/lib/libcrc32c.ko
+kernel/net/netfilter/xt_owner.ko: kernel/net/netfilter/x_tables.ko
+kernel/net/ipv4/netfilter/nf_defrag_ipv4.ko:
+kernel/net/ipv4/netfilter/ip_tables.ko: kernel/net/netfilter/x_tables.ko
+kernel/net/ipv6/netfilter/nf_defrag_ipv6.ko:
+kernel/net/tls/tls.ko:
+kernel/net/psample/psample.ko:
+kernel/virt/lib/irqbypass.ko:

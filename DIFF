@@ -1,0 +1,1863 @@
+commit 8bf3567532b07e2cc15aa4c76c36ebed65ccfaec
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Feb 27 15:51:35 2026 -0700
+
+    Release 26.1 (#6776)
+    
+    Bump the version in meson.biuld to 26.1 and update ChangeLog.
+
+commit 36736c30e8f30219314a76cefcfdb16ae6aee248
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Feb 27 15:33:00 2026 -0700
+
+    test: update hello package tested using rmadison (#6774)
+
+commit da854b999441496d8653349494c7db820f0fde34
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Feb 27 15:32:24 2026 -0700
+
+    test: add details about failing package status to aid in debug (#6775)
+
+commit 3ad28be2ff631bd8423dbf8c8ba397f6b87235a5
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Feb 27 14:13:45 2026 -0700
+
+    test: rust-coreutils date command breaks if positional args before options (#6773)
+    
+    Upstream uutils bug to track change in behavior from GNU coreutils:
+    https://github.com/uutils/coreutils/issues/11150.
+
+commit 9d89434317bea41f455ed30e7a956f34f1b45dea
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Feb 26 16:33:07 2026 -0700
+
+    ci: resolute rust-based gpg-sq rejects short GPG keyids (#6710)
+    
+    Use 16 character long-keyid for testing to avoid non-zero exit codes
+    warning of insecure short IDs in
+    gpg (GnuPG-compatible Sequoia Chameleon) 2.2.40.
+
+commit e8a9170bc5ffaf69cb059e5dcea03509d1e46031
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Wed Feb 25 16:26:25 2026 -0700
+
+    chore: fix pytest hypothesis-jsonschema warnings (#6761)
+    
+    Move fuzz tests to tests/fuzz/.
+    
+    Remove import-time code that tried to avoid a dependency on
+    hypothesis_jsonschema.
+
+commit 080ddb433a12649b9008dcbc6f9d1c34bc4fff25
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Wed Feb 25 15:13:31 2026 -0700
+
+    chore: silence deprecation warning for strptime (#6762)
+    
+    This warning is seen:
+    
+    DeprecationWarning: Parsing dates involving a day of month without a
+    year specified is ambiguious and fails to parse leap day. The default
+    behavior will change in Python 3.15
+    
+    The test verifies the expected behavior, so this is unnecessary noise.
+
+commit dd7e41727c079cb916e9ba52d8d8271cf3b9a60f
+Author: Brett Holman <bholman.devel@gmail.com>
+Date:   Fri Feb 20 21:52:05 2026 +0000
+
+    ci: disable daily jobs on fork branches
+    
+    Update integration common workflow calls.
+    Update names to be more succinct.
+
+commit e80c0899a665da3b7969250e49369a0dcf353bbb
+Author: Brett Holman <bholman.devel@gmail.com>
+Date:   Fri Feb 20 21:38:54 2026 +0000
+
+    ci: reorder gh actions jobs
+    
+    Github actions are ordered by file name in the UI. Organize by trigger
+    type and roughly what frequency they might be checked. Misc jobs go at
+    the end.
+
+commit 52ef4d17da7e65a6610f30c2644690049c3fdebd
+Author: James Falcon <therealfalcon@gmail.com>
+Date:   Tue Feb 17 22:46:17 2026 -0600
+
+    chore: silence crypt warnings
+    
+    It has already been worked around, so the warning is useless
+
+commit 402ae54a34b1af9630c57a78e46baa92c510211e
+Author: James Falcon <therealfalcon@gmail.com>
+Date:   Tue Feb 17 22:34:02 2026 -0600
+
+    test: fix pytest.raises error text warnings
+    
+    Dont pass "" as match text. Given that a common paradigm throughout
+    the tests is:
+    text = expected text
+    None = no exception
+    "" = exception with any text
+    
+    Workaround pytest's expectations here.
+
+commit e171b68abe7efa9d31b2e2c062cfc1a6b8198f76
+Author: James Falcon <therealfalcon@gmail.com>
+Date:   Tue Feb 17 20:18:35 2026 -0600
+
+    chore: make jsonschema remote retrieval explicit
+    
+    We were seeing this warning during unit tests:
+    DeprecationWarning: Automatically retrieving remote references can be
+    a security vulnerability and is discouraged by the JSON Schema
+    specifications. Relying on this behavior is deprecated and will shortly
+    become an error. If you are sure you want to remotely retrieve your
+    reference and that it is safe to do so, you can find instructions for
+    doing so via referencing.Registry in the referencing
+    documentation (https://referencing.readthedocs.org).
+    
+    In particular, the change is based on:
+    https://referencing.readthedocs.io/en/stable/intro/#dynamically-retrieving-resources
+
+commit 6565655585218883b736da37aee254ab0491b8ff
+Author: James Falcon <therealfalcon@gmail.com>
+Date:   Tue Feb 17 20:09:05 2026 -0600
+
+    test: fix mocker warnings during tests
+    
+    `mocker` shouldn't be used as a context manager, so just use the
+    standard `mock.patch` for places where it's intended.
+
+commit b990f8d286362443d5a3f3cc8005defc8b466300
+Author: Rizwarrior <94892947+Rizwarrior@users.noreply.github.com>
+Date:   Fri Feb 20 13:53:03 2026 +0000
+
+    chore: fix untyped-defs (#6760)
+
+commit 2f8566cc8109219a574e7cc3e738ba01259c42f2
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Feb 19 21:49:19 2026 -0700
+
+    test: provide snap commands to trigger wait semaphore on jammy (#6759)
+    
+    Additionally validate systemd ordering of cloud-config.service as
+    ordered After snap.seeded.service in Jammy.
+
+commit bb2f6b9efef718076152979251357bcfe3a897b9
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Thu Feb 19 07:53:36 2026 -0700
+
+    doc: fix various conventions (#6757)
+    
+    Grammar fixes.
+    Spelling GB -> US.
+    Add backticks for specific terms.
+    Spelling list updates.
+    
+    Change tox so that sphinx checks links imported from Python docstrings (-n).
+    Change tox so that sphinx builds docs even with warnings (--keep-going).
+    Change tox so that sphinx uses available cores (--jobs=auto).
+
+commit 180feb270764fe1a7b80a36680cb9867c2e50318
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Wed Feb 18 20:34:54 2026 -0700
+
+    chore: move conftest to test directory (#6758)
+
+commit 9416e66396e8dba2e51cacd58939a68e560ba801
+Author: Ani Sinha <anisinha@redhat.com>
+Date:   Wed Feb 18 04:00:08 2026 +0530
+
+    doc: replace Red Hat bugzilla with Red Hat jira (#6751)
+    
+    Red Hat deprecated use of bugzilla in favor of Jira.
+    Use the Red Hat jira link to file tickets against cloud-init.
+    
+    Signed-off-by: Ani Sinha <anisinha@redhat.com>
+
+commit e2aa5010a921d189d2be9684ea6b1269c1ac85cb
+Author: Favour <123068976+favourozogbu@users.noreply.github.com>
+Date:   Wed Feb 18 02:28:28 2026 +0400
+
+    doc: fix YAML indentation and wording in examples (#6750)
+    
+    Fix indentation under 'users:' to avoid confusion when copying the
+    example, and correct duplicated "On one hand" phrasing in the apt
+    configuration example.
+
+commit fd2f115fccdae2af9e7c52fb46fcef3a26ae548e
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Feb 17 13:59:26 2026 -0700
+
+    ci: restrict build-package upload-artifact and test to cloud-init-base
+
+commit a452a66506ed1327a1445c1172c772b72de0b453
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Feb 17 13:58:56 2026 -0700
+
+    ci: bddeb only create symlink to cloud-init-base for testing
+
+commit 4e3a920ea78f8af19b4a52944859f8e3f8b9530b
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Feb 17 11:23:08 2026 -0700
+
+    ci: update PR actions to test questing and runs-on to ubuntu-latest (#6753)
+    
+    Plucky is now EOL and no longer has active daily deb package builds.
+    
+    To reduce workflow maintenance, only pin workflows to an LTS
+    if workflows exhibit repeated failures due to ubuntu-latest.
+
+commit 417da89f1f8c343afaae433f4a66fb693f35ce6e
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Feb 12 16:23:11 2026 -0700
+
+    ci: feature values should be read from client under test (#6738)
+
+commit 67d8e237596bb42b777399edae8dd3ee66a72d3e
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Feb 12 15:48:36 2026 -0700
+
+    ci: use branches inclusion instead of branches-ignore exclusion (#6741)
+    
+    We have seen our branches-ignore still trigger gh-cla, alternate
+    distro and integration tests despite the target(base) branches
+    containing a leading 'ubuntu/' branch name.
+    
+    Instead of exclusion filters, let's give inclusion filters a pass
+    to ensure we only run these workflows on main or other versioned
+    upstream release  branches of the format: 26.1, 26.1.1 or 26.1.x.
+
+commit 92a9858f70a2ba23dc25bd107a7c36a0c86d0365
+Author: James Falcon <james.falcon@canonical.com>
+Date:   Wed Feb 11 13:39:22 2026 -0600
+
+    doc: fix mermaid diagram (#6743)
+
+commit de5c4518578fdba6828ffd5bb352c23d2201ec74
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Tue Feb 10 10:22:12 2026 -0700
+
+    chore: remove unused pylint suppressions (#6726)
+
+commit 944c5c975eb597955e3a068846a894b55531c717
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Mon Feb 9 07:43:01 2026 -0700
+
+    chore: remove unmaintained python tools (#6724)
+
+commit 9a3b627e9a3346a9cf0cf6fccaf899a943b45ad9
+Author: Jörn Heissler <joernheissler@users.noreply.github.com>
+Date:   Mon Feb 9 15:32:32 2026 +0100
+
+    docs: correct network-config filename in NoCloud heading (#6735)
+    
+    Co-authored-by: Jörn Heissler <nosuchaddress@joern-heissler.de>
+
+commit 090026a3d9a4ddda2d309c6f5be81a0dc30116f5
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Feb 6 09:52:56 2026 -0700
+
+    fix: do not write meson version twice in version.py (#6729)
+
+commit 961fc8490d67fa3ee5a268ffdc5c60261c8e3fb2
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Thu Feb 5 14:14:32 2026 -0700
+
+    doc: make doc hierarchy more focused (#6694)
+    
+    Various pages in the table of contents documented things that are not
+    useful without some other context. Remove these from the table of
+    contents and link to them from pages that have that context.
+    
+    Introduce new "advanced" pages under the reference and explanation
+    categories to link to pages which are not suitable for the average user.
+    
+    Other pages contained implementation details. Remove the implementation
+    details or move the page to be under the new "advanced" pages.
+    
+    Introduce a new "project status" page to gather project-related info.
+    
+    Delete content and pages containing duplicate information.
+    
+    Don't make security policy recommendations to users.
+    
+    Remove page documenting the performance analysis subcommand, since there
+    are more accurate ways of analyzing performance.
+    
+    File deletions
+    --------------
+    
+    about-cloud-config.rst
+    performance_analysis.rst
+    
+    File renames
+    ------------
+    
+    faq.rst -> from reference to explanation
+    user_files.rst -> from reference to explanation
+    module_run_frequency -> from how-to to reference
+    test_unreleased_packages -> from howto to reference
+    foramt.rst -> format/index.rst (and sub-pages)
+
+commit 72809f8046f7abb5157e864a903cc5cc3c70ecbb
+Author: drzee99 <info@drzee.net>
+Date:   Thu Feb 5 17:00:53 2026 +0100
+
+    fix: DNS resolution performance regression during local stage (#6707)
+    
+    Fixes DNS queries for IP addresses that cause 2+ minute boot delays
+    with systemd 259+. Moves IP detection earlier in is_resolvable() and
+    removes legacy DNS-dependent metadata URL.
+    
+    Fixes GH-6641
+
+commit afd0c6c5ebf5bba0385a9c76a1362d55aad022f9
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Feb 3 09:22:06 2026 -0700
+
+    chore: pin full SHA commits for all workflows (#6711)
+    
+    cloud-init project now requires full SHA commits instead of tags for
+    all workflows to utilize a more secure policy for CI runners.
+    
+    Any Github actions lacking full SHA pins in workflows/actions will
+    error due to repo prevention policy.
+    
+    Additionally update SHA pins to latest known workflow releases.
+
+commit 580b21bd3840f2d764371f95d8d835179b83e60a
+Author: Peyton Robertson <93797227+peytonr18@users.noreply.github.com>
+Date:   Mon Feb 2 20:27:54 2026 -0800
+
+    fix(azure): round duration field in FinishReportingEvent to four decimal places (#6709)
+
+commit 567cfe896d848877ba3e377445677c8c1971ff48
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Mon Feb 2 08:46:54 2026 -0700
+
+    ci: install missing distro-info-data dependency to test devel series resolute (#6701)
+
+commit 26c7d38de5c878bec16b96e72408e5f142a427cc
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Jan 30 18:30:01 2026 -0700
+
+    fix: datasource initialization order in stages (#6700)
+    
+    Add a unit test to cover this case.
+    
+    Fixes GH-6695
+
+commit 402038314da5adcd8b53e28f51413a8556815eb8
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Jan 30 17:20:24 2026 -0700
+
+    docs: security company policy updates (#6677)
+
+commit 8c4c59a05259456c1a540d239c404aa415eaf5e1
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Jan 27 22:01:57 2026 +0000
+
+    ci: add shared workflow for lxd_container integration tests
+    
+    Add _integration_common.yml which allows parameterized launches of
+    lxc_container based integration tests.
+    
+    Provide separate daily scheduled integration test runners for jammy,
+    noble, questing and resolute which can also by manually started.
+
+commit 8a5234705194bc35f1c965340920ec228e1548aa
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Thu Jan 29 20:15:13 2026 -0700
+
+    doc: clarify CLA check (#6692)
+
+commit 9c2faf8ef66d1e04c32752b2d164504388ddc1ed
+Author: Chris Patterson <cpatterson@microsoft.com>
+Date:   Thu Jan 29 06:36:05 2026 -0800
+
+    feat(dhcp): enable --debug option for dhcpcd (#6693)
+    
+    The primary motivation for this extra detail is to capture the
+    flow when multiple DISCOVER requests are required, similar to
+    what we see in dhclient today so we can better understand how
+    time is spent in dhcpcd.
+    
+    Without debug:
+    
+    ```
+    2026-01-28 18:19:59,156 - azure.py[DEBUG]: dhcp client stderr for interface=eth0: dhcpcd-10.0.6 starting
+    DUID 00:01:00:01:31:0d:0f:cd:60:45:bd:86:6f:e1
+    eth0: IAID bd:86:6f:e1
+    eth0: soliciting a DHCP lease
+    eth0: offered 10.0.0.4 from 168.63.129.16 LVL101082702015SOC
+    eth0: leased 10.0.0.4 for infinity
+    eth0: adding route to 10.0.0.0/16
+    eth0: adding default route via 10.0.0.1
+    eth0: adding host route to 168.63.129.16 via 10.0.0.1
+    eth0: adding host route to 169.254.169.254 via 10.0.0.1
+    ```
+    
+    With debug:
+    
+    ```
+    2026-01-28 19:52:56,822 - performance.py[DEBUG]: Running ['dhcpcd', '--ipv4only', '--waitip', '--persistent', '--noarp', '--debug', '--script=/bin/true', 'eth0'] took 0.128 seconds
+    2026-01-28 19:52:56,822 - azure.py[DEBUG]: dhcp client stdout for interface=eth0:
+    2026-01-28 19:52:56,822 - azure.py[DEBUG]: dhcp client stderr for interface=eth0: dhcpcd-10.0.6 starting
+    spawned manager process on PID 527
+    chrooting as dhcpcd to /usr/lib/dhcpcd
+    sandbox: seccomp
+    spawned privileged proxy on PID 528
+    spawned controller proxy on PID 529
+    eth0: executing: /bin/true PREINIT
+    eth0: executing: /bin/true CARRIER
+    DUID 00:01:00:01:31:0d:25:98:60:45:bd:86:6f:e1
+    eth0: IAID bd:86:6f:e1
+    eth0: delaying IPv4 for 0.0 seconds
+    eth0: reading lease: /var/lib/dhcpcd/eth0.lease
+    eth0: soliciting a DHCP lease
+    eth0: spawned BPF BOOTP on PID 535
+    eth0: sending DISCOVER (xid 0x3793814b), next in 4.6 seconds
+    eth0: offered 10.0.0.4 from 168.63.129.16 LVL101082702015SOC
+    eth0: process BPF BOOTP already started on pid 535
+    eth0: sending REQUEST (xid 0x3793814b), next in 4.4 seconds
+    eth0: acknowledged 10.0.0.4 from 168.63.129.16 LVL101082702015SOC
+    eth0: leased 10.0.0.4 for infinity
+    eth0: writing lease: /var/lib/dhcpcd/eth0.lease
+    eth0: adding IP address 10.0.0.4/16 broadcast 10.0.255.255
+    eth0: using Classless Static Routes
+    eth0: adding route to 10.0.0.0/16
+    eth0: adding default route via 10.0.0.1
+    eth0: adding host route to 168.63.129.16 via 10.0.0.1
+    eth0: adding host route to 169.254.169.254 via 10.0.0.1
+    eth0: executing: /bin/true BOUND
+    forked to background
+    ```
+    
+    One interesting detail I noticed is that a persistent lease file
+    may be used for reboots and DISCOVER is skipped:
+    
+    ```
+    2026-01-28 19:49:57,987 - performance.py[DEBUG]: Running ['dhcpcd', '--ipv4only', '--waitip', '--persistent', '--noarp', '--debug', '--script=/bin/true', 'eth0'] took 0.386 seconds
+    2026-01-28 19:49:57,987 - azure.py[DEBUG]: dhcp client stdout for interface=eth0:
+    2026-01-28 19:49:57,987 - azure.py[DEBUG]: dhcp client stderr for interface=eth0: dhcpcd-10.0.6 starting
+    chrooting as dhcpcd to /usr/lib/dhcpcd
+    sandbox: seccomp
+    spawned manager process on PID 527
+    spawned privileged proxy on PID 528
+    spawned controller proxy on PID 529
+    DUID 00:01:00:01:31:0d:0f:cd:60:45:bd:86:6f:e1
+    eth0: executing: /bin/true PREINIT
+    eth0: executing: /bin/true CARRIER
+    eth0: IAID bd:86:6f:e1
+    eth0: delaying IPv4 for 0.4 seconds
+    eth0: reading lease: /var/lib/dhcpcd/eth0.lease
+    eth0: rebinding lease of 10.0.0.4
+    eth0: spawned BPF ARP 10.0.0.4 on PID 545
+    eth0: sending REQUEST (xid 0x3740297a), next in 4.5 seconds
+    eth0: spawned BPF BOOTP on PID 546
+    eth0: acknowledged 10.0.0.4 from 168.63.129.16 LVL101082702015SOC
+    eth0: leased 10.0.0.4 for infinity
+    eth0: writing lease: /var/lib/dhcpcd/eth0.lease
+    eth0: adding IP address 10.0.0.4/16 broadcast 10.0.255.255
+    eth0: using Classless Static Routes
+    eth0: adding route to 10.0.0.0/16
+    eth0: adding default route via 10.0.0.1
+    eth0: adding host route to 168.63.129.16 via 10.0.0.1
+    eth0: adding host route to 169.254.169.254 via 10.0.0.1
+    eth0: executing: /bin/true REBOOT
+    forked to background
+    ```
+    
+    The --debug option has been around forever for dhcpcd so it should
+    be safe.  We can see it the oldest tagged version in git and
+    Ubuntu 14.04's manpage:
+    https://manpages.ubuntu.com/manpages//trusty/man8/dhcpcd-bin.8.html
+    
+    Signed-off-by: Chris Patterson <cpatterson@microsoft.com>
+
+commit feaf147164d6b2c94870b2682b3a48aa064d2f46
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Mon Jan 26 16:25:36 2026 -0700
+
+    doc: clarify verbose language (#6688)
+    
+    Also eliminate recommendation to modify datasource_list.
+
+commit 78f6f15ec81c972c98c1397a2def0e7eac93caaf
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Jan 23 15:39:13 2026 -0700
+
+    fix: migrate from ntp client package installed from ntp to ntpsec (#6684)
+    
+    Change the installed ntp client package from ntp to ntpsec when
+    user-data requests `ntp_client: ntp`.
+    
+    Fix inability to install ntp deb packages from universe in Ubuntu for
+    some time which resulted in errors from `cloud-init status` and
+    failed integration tests.
+    
+    Most distributions have migrated away from ntp to ntpsec as replacement
+    implementation which has better security and maintenance as a project.
+    
+    Package migration has happened in many distributions already:
+    - Ubuntu was in Xenial 2016
+    - OpenSUSE available since 2019
+    - Fedora 34 2021
+    - Debian Bookworm 2023
+    - Alpine 3.10 2019
+
+commit b7b6256275b8418535f3e1f03b92bfa3d03dfbfa
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Jan 23 13:35:39 2026 -0700
+
+    chore(stages): enable type checking (#6672)
+    
+    Init()'s initialization code is self-referential and has runtime
+    ordering that prevents static analysis.
+    
+    Create a property Init.ds which only returns an initialized DataSource.
+    
+    This narrows the possible code paths that mypy must check and makes
+    static (and human) analysis possible.
+
+commit d9834a30c4c9b41a78e1f471504361fc8d9b42c9
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Fri Jan 23 18:44:19 2026 +0100
+
+    fix: respect SSH key options for the root user (#6585)
+    
+    When no user is provided in the datasource and root login is not
+    disabled, the root user is configured.  Preserve the provided SSH
+    key options from user-data for root user in this case.
+    
+    Before this fix, SSH key options passed in the key line were silently
+    ignored.
+    This is what happens:
+    * `apply_credentials` passes `options=""` to `setup_user_keys`:
+      https://github.com/canonical/cloud-init/blob/25.3/cloudinit/config/cc_ssh.py#L257
+    * `setup_user_keys` receives the empty parameter and passes it to the
+      `parse` function:
+      https://github.com/canonical/cloud-init/blob/25.3/cloudinit/ssh_util.py#L463
+    * The `parse` function decides whether options from the key line need to
+      be overridden by the `options` parameter. Treat any falsy `options`
+      parameter should be treated like `None`, otherwise options from the key
+      line are ignored.
+    
+    Fixes: GH-3868
+
+commit 0686791aa0dd34492078f2cbe546172406ffd022
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Jan 23 07:32:12 2026 -0700
+
+    fix: cloud-init clean --logs should not remove non-files (#6568)
+    
+    Prevent traceback raised when cloud-init clean --logs encounters
+    character-device paths in log configuration.
+
+commit d2bf883931723cfdc9f529eba5395d83059d09c6
+Author: CodeBleu <400979+CodeBleu@users.noreply.github.com>
+Date:   Tue Jan 20 13:52:54 2026 -0500
+
+    fix(cloudstack): Improve domain-name DHCP lease lookup (Cloudstack) (#6554)
+    
+    * Adding case-insensitive options for systemd-networkd leases ("DOMAINNAME", "Domain", "domain-name").
+    * Falling back gracefully from systemd leases to ISC dhclient leases.
+    * Including dhcpcd ephemeral leases as an additional fallback.
+    * Returning an empty string when no domain name found instead of None for non-fatal missing cases.
+
+commit f0659039bdb843aaa47f84954670aa2d54ea06d1
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Jan 16 17:17:23 2026 -0700
+
+    doc: document socket protocol change
+    
+    * doc: document socket protocol change
+    
+    * spelling
+
+commit 9e6151a26f31c7405de2b2ad9de7b4aec84c9e4f
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Jan 15 16:58:32 2026 -0700
+
+    ci: retain system packages for TICS workflow due to virtualenv version errors
+    
+    Install system packages in TICS workflow until resolution is provided
+    for inability to source virtualenv path during TICS analysis.
+    
+    Attempting to use tox virtualenv currently results in:
+    
+       Version string '<full_virtenv_python_path>:' too long for column
+       'VersionString.Name'
+
+commit 306d66cf6368f0e254f4bcd882004d4bae5938f2
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Jan 15 15:48:57 2026 -0700
+
+    ci: run and source pylint tox target used by TICS checkers
+
+commit 54a58e6d05006eab8fd107b84a3b1daf24defb54
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Jan 13 17:59:31 2026 -0700
+
+    ci: add actionlint.yml ignores
+
+commit 328031893babb9073ef38d48c7268390d60489d6
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Jan 13 15:37:00 2026 -0700
+
+    ci: export python path to GITHUB_ENV from tox venv
+    
+    Resolve missing python dependencies such as pylint seen during TICS
+    reporting stage by using python from tox virtual environment instead
+    of installing system packages.
+
+commit 5531de2522ce3625b1eb142ed719860b90a2f2b0
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Wed Jan 14 20:35:24 2026 -0700
+
+    feat(lxd): add s390x virtio-ports detection for LXD (#6597)
+    
+    Support LXD detection on IBM's s390x architecture add a new
+    detection method which checks for LXD serial devices in
+    /sys/class/virtio-ports/ for both current (com.canonical.lxd) and
+    legacy (org.linuxcontainers.lxd) names.
+    
+    Update public LXD datasource documentation for this detection method.
+    
+    Drop the now unnecessary DMI board name check from ds-identify and
+    DataSourceLXD because virtio-ports is sufficient for KVM/QEMU and
+    non-x86_64 platforms without DMI information.
+    
+    The following mechinisms for LXD detection are retained:
+    1. /dev/lxd/sock socket file (primary method)
+    2. virtio-ports serial device presence if socket file isn't yet present
+
+commit e7f970b5f75ed23d5f2db11a66dd2c288629bcdf
+Author: MoeSalah1999 <161456250+MoeSalah1999@users.noreply.github.com>
+Date:   Tue Jan 13 23:29:52 2026 +0300
+
+    test: pytestified test_cc_growpart.py (#6625)
+    
+    Converted test_cc_growpart.py from unittest to pytest:
+    -Removed all unittest and TestCase imports and inheritances.
+    -Used pytest fixtures for setup and mocks
+    -Converted all self.assert to plain assert.
+    -Made a couple of minor changes to avoid unusual behavior.
+    
+    Related GH-6427
+
+commit ac729abb9d6f06564f11861f28f81a8b06348b86
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Jan 13 12:46:51 2026 -0700
+
+    ci: add reviewdog workflow lint for github actions (#6662)
+
+commit fb44d8d9f9f98593d30307de024b8e2d41584029
+Author: Ayushi_Sharma <95244946+ayushigithub12@users.noreply.github.com>
+Date:   Mon Jan 12 23:07:02 2026 +0530
+
+    docs: fix broken external documentation links (#6664)
+    
+    Fix broken or outdated external URLs across reference and development
+    documentation to ensure Sphinx linkcheck passes successfully.
+    
+    This updates links that returned 404/403 responses, invalid anchors,
+    or pointed to deprecated resources, without changing documented
+    behavior.
+    
+    Fixes GH-6595
+
+commit f8a7c8c4c7e5fdb9862c124477d3ff50cf0f4039
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Jan 9 16:09:47 2026 -0700
+
+    ci: fix cross-distro test failures, various maintenance (#6663)
+    
+    Fix cross-distro test failures
+    Add scheduled macos unit test
+    Add color to output
+    Remove references to read-version and tags from
+    Don't clone repo metadata that was required for read-version
+
+commit 2d4519d49e6ee719c0095c0cd42e6bd776df9fa9
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Jan 9 15:51:51 2026 -0700
+
+    feat: support Tilaa cloud (#6658)
+    
+    Fixes #6656
+
+commit 5803e84488eebbd43ace8512b49ea49eb4bef034
+Author: Ayushi_Sharma <95244946+ayushigithub12@users.noreply.github.com>
+Date:   Fri Jan 9 23:32:31 2026 +0530
+
+    docs: fix broken documentation links (#6660)
+    
+    Fix broken and outdated links across README, CONTRIBUTING, and RTD
+    documentation pages. This improves navigation and prevents dead
+    references in published docs.
+    
+    Fixes GH-6595
+
+commit 9934bbec918b6861be86c90a724695bfbef5a07e
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Jan 9 10:42:29 2026 -0700
+
+    ci: typo duplicated run declaration in tics workflow (#6661)
+
+commit 6901be5d7ebcee8c0f031fe91fd0d2b70bada83c
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Jan 9 10:24:03 2026 -0700
+
+    ci: quote workflow names to avoid invalid YAML (#6659)
+
+commit 064019ec018729e8c62f89b20b91d9b3ed1c7ba4
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Jan 9 08:52:14 2026 -0700
+
+    test: add gh workflow for tiobe TICS static analysis reporting (#6654)
+
+commit 44955250876ad407ed83e7fe0f24eb4aaf992a98
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Thu Jan 8 17:45:03 2026 -0700
+
+    chore: type cloudinit/sources/__init__.py (#6647)
+
+commit 7af9d0a62957907db7759e854aceadbd83b819bb
+Author: Zach Raines <zach@zmraines.com>
+Date:   Wed Jan 7 13:10:47 2026 -0600
+
+    fix(ec2): check elastic NICs for metadata server first (#6651)
+    
+    The EC2 datasource checks all NICs one by one to see which can reach the
+    metadata server. This can lead to slow boot if the primary NIC is not
+    checked first. We use the fact that typically the primary NIC on an EC2
+    instance will be the lowest numbered Elastic interface (either ENA or
+    EFA) and order these first. Only then checking other network devices
+    that may be present.
+    
+    Fixes GH-6618
+    
+    Signed-off-by: Zachary Raines <zachary.raines@canonical.com>
+
+commit 974646e6fe25d1dc8d9a6b96f6990ecc5df30c21
+Author: Peyton Robertson <93797227+peytonr18@users.noreply.github.com>
+Date:   Tue Jan 6 15:12:31 2026 -0800
+
+    feat(azure): add vm_id to KVP telemetry event keys (#6551)
+    
+    Add VM ID to the KVP (Key-Value Pair) event key format to improve
+    telemetry tracking and debugging capabilities for Azure/Hyper-V
+    deployments.
+
+commit 4810cc646f0a50fcdededae27258e6c714c88b63
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Tue Jan 6 14:33:00 2026 -0700
+
+    ci: exercise TMPDIR now that it works (#6652)
+
+commit 7cc31f585eafb2697c3e728fcf3de12e616820df
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Tue Jan 6 19:39:37 2026 +0000
+
+    chore: rename workflow files for organization
+
+commit 6880d349718c42bc0a3d8e04568489444ca2c9e5
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Tue Jan 6 19:32:48 2026 +0000
+
+    ci: reword action and workflow names for clarity
+
+commit 78da9db198cb47079d51180c2eb595fde5b4b263
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Tue Jan 6 19:14:43 2026 +0000
+
+    ci: add Python 3.15
+
+commit e02b739fc094eb8b56391705c2989f4aecbe139b
+Author: Leah <76408777+goldberl@users.noreply.github.com>
+Date:   Tue Jan 6 15:01:59 2026 -0500
+
+    fix: Pass interface string to get_newest_lease() (#6648)
+    
+    In DataSourceCloudStack.py, get_newest_lease() is currently being
+    passed a Distro object, causing a Python type error. This PR
+    changes the Distro object to the interface string to fix this error.
+
+commit b5080b9875b69e09dcf335bb214312cf3c692465
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Mon Jan 5 12:36:00 2026 -0600
+
+    test: Skip Azure openssl tests on non-Linux
+    
+    Implementation differences cause different results.
+
+commit 3139e9437d05542cb809d39429440308504c028c
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 09:04:27 2025 -0500
+
+    test: skip Linux-specific test on non-Linux
+    
+    Note that this test wasn't always Linux-specific, but when the pid
+    stuff moved under Distro, the test was changed to test the base
+    class (i.e., Linux) functionality only.
+
+commit e346b5104040dfe0736a057978b709f26c11f78b
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:54:22 2025 -0500
+
+    test: use realpath for tmp directories
+
+commit 4e45baa3a894b64fa99fe26bcabb65f549c91e11
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Wed Sep 10 22:47:13 2025 -0500
+
+    fix: ensure mount type is used if passed
+
+commit 818a261ad456899fcb303eb5ae52a37279f99597
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Wed Sep 10 22:31:22 2025 -0500
+
+    test: Replace 'echo -n' with 'printf'
+    
+    'echo -n' isn't universal
+
+commit d8d5a477e07259573664f2db4566908d628e1c54
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Wed Sep 10 22:15:56 2025 -0500
+
+    test: ensure symlinks are resolved in certain tests
+
+commit 528a712d5856bfcaab4ef6e0a5a78086893d3e8a
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:38:53 2025 -0500
+
+    test: add a socket fixtures and mocks
+    
+    Many socket attributes are OS-specific, so ensure we
+    have attributes that work for the tests that need them.
+    Also, mock socket calls where needed.
+
+commit ec10d36d3e000d380cd1826def1508ee31413707
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:38:48 2025 -0500
+
+    test: hardcode passlib usage in Azure test
+
+commit 45c7555675682c398f7d1359b09c4150ff888ec0
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:38:41 2025 -0500
+
+    test: mock chown to account for distro grp differences
+
+commit 2024036f65cd46da4fc47c15bd1bec02c4148d6f
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:38:36 2025 -0500
+
+    test: bring back fake tmpdir creation
+    
+    It was removed in #6356, but is still needed in some tests that
+    interact with `/tmp`.
+
+commit c3bf2079f981be3fd96a90719d216b9781f9f0b3
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:38:33 2025 -0500
+
+    test: ensure we don't actually rename ntp.conf in test
+
+commit 3d7b54525a712ed0e330dee9642b37f09ad9f857
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:38:31 2025 -0500
+
+    fix: ensure timestamp timezone encoded correctly in status.py
+    
+    `time.strftime()` has platform-specific behavior when dealing with
+    a `gmtime()` struct.
+
+commit 1ae2027660c669f4ec2d3ac350ac3ac4950b01f5
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:37:59 2025 -0500
+
+    test: ensure TMPDIR parents exist
+
+commit 70b8771c9170b33c505206f85d762fe5d7addd2e
+Author: James Falcon <jfalcon@coreweave.com>
+Date:   Thu Sep 11 08:37:15 2025 -0500
+
+    fix: don't traceback when using BSD date
+    
+    The "has_gnu_date" function checks "date --help" output, but some
+    versions of "date" don't include a "--help" flag.
+
+commit ec44db2615d7a673589f7b9cff3b0a1a2171987c
+Author: Cade Jacobson <91996442+cadejacobson@users.noreply.github.com>
+Date:   Tue Jan 6 09:08:44 2026 -0800
+
+    fix(azure): ensure ephemeral networking uses primary NIC (#6556)
+    
+    When ephemeral networking is brought up in Azure, the selected interface
+    (`iface`) is `None` under certain conditions. This change introduces
+    a helper function `find_primary_nic()` which uses
+    `net.find_candidate_nics()` to determine and select the system's primary
+    network interface if one is not explicitly set.
+    
+    Additional improvements:
+    - Log the MAC address and driver of the selected NIC for easier debugging.
+    - Ensure the DHCP retry loop updates `iface` to the current primary NIC before
+      retrying to obtain a lease.
+    
+    Fixes #6558
+
+commit a19f958c7efdc2fec8f098ec4caa0a15fcb37af1
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Jan 6 09:32:20 2026 -0700
+
+    chore: drop dscheck maas (#6638)
+    
+    Add test_ds_identify functionality to provide environment variables to
+    tests using PATH_DI_ENV.
+
+commit fad68ab5c39ef8eb265be649ce246d1697e9866f
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Mon Jan 5 14:37:32 2026 -0700
+
+    chore: enable type checking cloudinit/distros/__init__.py (#6646)
+
+commit 85c463890cbf328da99fc38796daaf62aeb38639
+Author: Andrei Cherniaev <glscene2010@gmail.com>
+Date:   Mon Jan 5 22:26:09 2026 +0900
+
+    chore: use curl instead of wget (#6610)
+
+commit 9813bb84fa10d07023b85eb20c28f756ef52d375
+Author: Siva Mahadevan <me@svmhdvn.name>
+Date:   Mon Jan 5 08:10:35 2026 -0500
+
+    fix(distros/freebsd): set home_dir to /home (#6637)
+    
+    This is true since FreeBSD 14.0-RELEASE
+    
+    https://www.freebsd.org/releases/14.0R/relnotes/
+    https://cgit.freebsd.org/src/commit/?id=bbb2d2ce4220
+
+commit 07173578ccda5330032b8ec7a82565167860ab88
+Author: Ani Sinha <anisinha@redhat.com>
+Date:   Mon Jan 5 18:38:30 2026 +0530
+
+    chore: Remove multiple entries in spec file (#6599)
+    
+    disable-sshd-keygen-if-cloud-init-active.conf seems to have been added twice.
+    Fix it.
+    
+    Also replace '/usr/lib/systemd/system' by the macro %{_unitdir} to make the
+    spec file more portable across distros.
+    
+    Signed-off-by: Ani Sinha <anisinha@redhat.com>
+
+commit 07922ae05511aab160390a8ed18dfa6c1e03e57f
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Dec 19 10:03:23 2025 -0700
+
+    chore: add scheduled job for py3-fast (#6634)
+
+commit 3067c25617ef254e2e7d6b0ca6b49fa030434c8c
+Author: MoeSalah1999 <161456250+MoeSalah1999@users.noreply.github.com>
+Date:   Fri Dec 19 18:35:01 2025 +0300
+
+    tests: convert test_cc_rsyslog.py to pytest (#6622)
+    
+    -made sure test case classes don't inherit from TestCase
+    -used pytest fixtures instead of unittest setUp method
+    -converted all self.assert to plain assert.
+    
+    Related GH-6427
+
+commit 0400ac6240a9011fba2a3ec413bf06a37436b336
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Thu Dec 18 18:58:59 2025 -0700
+
+    chore(mypy): check sysconfig now that it passes (#6635)
+
+commit f831873888401eaaa7c608809a44814f2f0474f1
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Thu Dec 18 18:56:05 2025 -0700
+
+    chore: update pin and silence a valid mypy warning (#6633)
+    
+    Pin updated to mypy 1.19.1
+
+commit 851dc9ae0ad745be9ce2eeeb600523e7365cc646
+Author: MoeSalah1999 <161456250+MoeSalah1999@users.noreply.github.com>
+Date:   Fri Dec 19 04:23:56 2025 +0300
+
+    tests: convert test_cc_power_state_change.py to pytest (#6624)
+    
+    - Removed all TestCase subclasses.
+    - Used pytest fixtures instead of the unittest setUp method.
+    - Converted all self.assert to plain assert.
+    
+    References GH-6427
+
+commit b117d244b53b40a77e566ffbc118affeb2a2dbc9
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Dec 18 17:02:38 2025 -0700
+
+    fix: install lxd snap only when snap list lxd reports absent (#6626)
+    
+    Enable cloud-init to 'snap install lxd' when 'snap list lxd' reports
+    that the lxd snap is not available. Do not rely on which('lxd') because
+    lxd-installer deb package delivers this script, not the lxd snap.
+    
+    Prior to Ubuntu Plucky, lxd-installer /usr/sbin/lxd would automatically
+    install lxd snap if it wasn't on the system. In Ubuntu Plucky and newer
+    lxd-installer now blocks on a user prompt "Would you like to install
+    LXD.. ?" which prevents cloud-init from automatically installing LXD
+    snap.
+    
+    LP: #2136198
+
+commit 5efa2c631ce10c0574e2ec2bc2a3c153f8d00e55
+Author: Wei Zhou <weizhou@apache.org>
+Date:   Thu Dec 18 22:43:59 2025 +0100
+
+    feat(cloudstack): fetch vm password using url_helper instead of wget (#6593)
+
+commit 7f84ece2a9aed1468fd0a616b345540548add385
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Dec 18 09:28:44 2025 -0700
+
+    chore: sync gh workflow/shellcheck-debian-scripts.yml to main
+    
+    Sync downstream workflow changes into main for shellcheck ignore
+    behavior from commit a0c594d685.
+
+commit df0c1036cf3714104c96cc30276a4fa427e8a5cf
+Author: Peyton Robertson <93797227+peytonr18@users.noreply.github.com>
+Date:   Wed Dec 17 17:23:06 2025 -0800
+
+    feat(reporting): report duration on finish events (#6552)
+    
+    - Ensure `ReportEventStack` computes elapsed time and passes it through `FinishReportingEvent` so all reporting handlers can emit durations.
+    - Capture the `duration` field in Hyper-V KVP metadata and adjust unit tests to assert the value is present.
+    - Note: any external callers constructing `FinishReportingEvent` will need to provide a duration argument.
+
+commit aa17949411652dca11d2bbda207603368037cea4
+Author: Fabien Malfoy <fmalfoy@scaleway.com>
+Date:   Wed Dec 17 15:41:58 2025 +0100
+
+    feat(scaleway): add AZ and region fields to DataSourceScaleway (#6616)
+
+commit 0f09ed190f77b2c16918f865da35d0ead83fe27a
+Author: Fabien Malfoy <fmalfoy@scaleway.com>
+Date:   Wed Dec 17 15:39:53 2025 +0100
+
+    refactor(scaleway): remove private_ip handling (#6617)
+
+commit fcb98b03498c332d9ae7dff8a56b406600b09e7a
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Dec 12 11:17:00 2025 -0700
+
+    chore: drop support for Python 3.8 (#6607)
+
+commit e6955e6187162c1e094fe6a3bb9370a7f283bb69
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Fri Dec 12 08:51:27 2025 -0700
+
+    tests: skip azure ssh-keygen unittests when ssh-keygen not installed (#6612)
+    
+    Followup to baedc33ac to support skipping azure ssh-keygen related
+    tests from running in environments without ssh-keygen installed.
+
+commit ff1b0d217fd02a6e4e1d3f1a94dd307dce302e26
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Dec 11 20:19:45 2025 -0700
+
+    chore: no CLA workflow on downstream ubuntu package branches (#6620)
+
+commit 78a748808c5206d2c9cefb4d05c338425a3d2dc4
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Mon Dec 8 16:52:49 2025 -0700
+
+    doc(examples): remove datasource configuration (#6609)
+
+commit d7bc16295eadec031a513439729f7e91c0b9f336
+Author: Paul <44974737+paulober@users.noreply.github.com>
+Date:   Mon Dec 8 16:50:11 2025 +0100
+
+    feat(raspberry-pi-os): Disable fallback netcfg + remove apt mirror cfg (#6482)
+    
+    Disable the fallback netcfg in the cloud.cfg template for
+    Raspberry Pi OS and remove the apt mirror config because
+    RPi OS ships as already installed images and there is no
+    scenario where users are expected to rely on cloud-init
+    for providing the apt config.
+    
+    Signed-off-by: paulober <paul.oberosler@raspberrypi.com>
+
+commit 78c68f5934c84dfa0dcce2cd1e755d1a420f7431
+Author: Paul <44974737+paulober@users.noreply.github.com>
+Date:   Wed Dec 3 16:29:44 2025 +0100
+
+    fix(raspberry-pi-os): adjust systemd network ordering; drop obsolete deps (#6459)
+    
+    Align systemd network ordering with current Raspberry Pi OS behavior.
+    The previous sequencing was designed around older cloud-init and
+    setup-wizard requirements, but recent upstream and downstream
+    changes make those workarounds unnecessary. The updated ordering
+    matches default expectations and works reliably with newer
+    NetworkManager/Netplan fixes.
+    
+    Remove the no-longer-needed Before=avahi-daemon.service dependency,
+    simplifying the unit and bringing it closer to other distros.
+    
+    Run the network units before sysinit.target, which is consistent with how
+    RPi OS boots and has been validated in current downstream images.
+    
+    Signed-off-by: paulober <paul.oberosler@raspberrypi.com>
+
+commit a7c16dff2cb6b1bc78ef67f9aad5cd5940566104
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Wed Dec 3 08:28:04 2025 -0700
+
+    chore: fix logs with too few arguments (#6591)
+
+commit 849fb062c4d4ebdf288ddce92dfc7d8a9a3d837a
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Mon Dec 1 16:14:41 2025 -0700
+
+    docs: eliminate unnecessary information from first development page (#6566)
+
+commit 8907560150cedab3d3cf6de50263362ceb6b40b5
+Author: Mathieu Parent <math.parent@etik.com>
+Date:   Fri Nov 28 23:55:12 2025 +0100
+
+    feat(net): render vlan, bond, bridge for v1 network state (#6538)
+    
+    Including network_data.json
+    
+    Fixes GH-6534
+    
+    Signed-off-by: Mathieu Parent <math.parent@gmail.com>
+
+commit 009c0ec1b6f3d0dd9aabff9ed1e6ad94dd50ecc8
+Author: Ani Sinha <anisinha@redhat.com>
+Date:   Fri Nov 28 23:19:57 2025 +0530
+
+    fix(rhel): Do not override changes in disable-sshd-keygen-if-cloud-init-active.conf (#6587)
+    
+    When customer has local changes in disable-sshd-keygen-if-cloud-init-active.conf
+    and they try to upgrade cloud-init, the local changes are lost and the config
+    file reverts back to original content. This disrupts the customer as it breaks
+    their deployments and the config changes needs to be manually applied again.
+    The customer should be able to overwrite the config file with any changes that
+    work for their environment or work around some issues. Those changes should be
+    retained by rpm upgrade process. Therefore, in the spec file, mark the config
+    file as "noreplace" so that changes are kept.
+    
+    Signed-off-by: Ani Sinha <anisinha@redhat.com>
+
+commit 583c2ebe5088c56d48950a4b32f69a3ad3259929
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Fri Nov 28 18:47:33 2025 +0100
+
+    fix(ssh_util): typo in exception message (#6590)
+
+commit 0cb642727f83833e60a1174815a93d6398cd61ed
+Author: Brett Holman <brett.holman@canonical.com>
+Date:   Fri Nov 21 10:49:37 2025 -0700
+
+    docs(reference): include openstack bond change (#6581)
+
+commit e68bb6ea3424ad232dc9c084e5db7232e0dc944c
+Author: Shreenidhi Shedi <53473811+sshedi@users.noreply.github.com>
+Date:   Fri Nov 21 00:21:29 2025 +0530
+
+    fix(network_state): add some missing keys to V2 key filter list (#6555)
+    
+    These keys are supported in v2 config but network state gives a
+    traceback while parsing the config yaml.
+    
+    Signed-off-by: Shreenidhi Shedi <shreenidhi.shedi@broadcom.com>
+
+commit baedc33ac43fc6b23d99c3b4a26e4f2d8f23d2a0
+Author: Cade Jacobson <91996442+cadejacobson@users.noreply.github.com>
+Date:   Thu Nov 20 09:36:17 2025 -0800
+
+    test(azure): run pubkey extraction and certificate parsing tests (#6572)
+    
+    Enables `test_pubkey_extract` and `test_parse_certificates`
+    to be run by Pytest as part of the CI pipeline.
+    
+    Fixes GH-6571
+
+commit 7c684160ecada299643573778de91d2a7f1a0024
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Thu Nov 20 03:12:18 2025 +0100
+
+    fix: support bond names in network_data.json (#6546)
+    
+    The code to support the "name" attribute is already present. It should
+    not be ignored for bond devices.
+
+commit 7b400e43bbdd489889dc3e7b2076b402ca6c4028
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Thu Nov 20 02:22:16 2025 +0100
+
+    fix(schema): allow accept_ra for bond/bridge/VLAN devices (#6545)
+    
+    Setting a static IPv6 on a bond device resulted in the following error:
+    ```
+    Error: Cloud config schema errors: config.2: Additional properties are not allowed ('accept-ra' was unexpected), config.2: {'accept-ra': False, 'bond_interfaces': ['enp97s0f0np0', 'enp97s0f1np1'], 'mac_address': 'a0:42:3f:00:01:02', 'name': 'bond0', 'params': {'bond-mode': '802.3ad', 'bond-xmit_hash_policy': 'layer3+4'}, 'subnets': [{'type': 'dhcp4'}, {'address': '2001::/56', 'gateway': 'fe80::1', 'ipv6': True, 'type': 'static6'}], 'type': 'bond'} is not valid under any of the given schemas
+    ```
+    Setting the `accept_ra` sysctl should not be limited to physical
+    interfaces: bond, bridge and VLAN interfaces should also support it.
+
+commit af454f257d57306841162b43868dd168ac77dbeb
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Tue Nov 18 05:08:59 2025 +0545
+
+    test: convert test__init__.py from unit test to pytest (#6537)
+    
+    Refactored tests/unittests/test__init__.py to use pytest instead
+    of unittest.TestCase as part of the pytest migration effort.
+    
+      - Removed TestCase inheritance
+      - Replaced setup method with fixtures
+      - Maintained all original test functionality
+    
+      Related GH-6427
+
+commit 62bc0ec17cd9fc26964d6e7494d358d4b2faa6d3
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Mon Nov 17 19:29:08 2025 +0100
+
+    doc(network v1): fix list of required keys for bond interfaces (#6544)
+    
+    As per the schema, only the name is required, all other keys are
+    optional.
+
+commit 5e1d8f630c75e6f50e47c15642fe0d403967668d
+Author: Prakash Surya <prakash.surya@perforce.com>
+Date:   Thu Nov 13 18:11:20 2025 -0800
+
+    fix(oracle): handle null metadata field in oracle data source (#6549)
+    
+    When running on a Oracle Private Cloud Appliance, we've seen the
+    metadata server return a response where the "metadata" field has a value
+    of "null"; i.e. the "metadata" field exists, but has a "null" value.
+    
+    As a result, the logic within DataSourceOracle.py throws:
+    
+        Traceback (most recent call last):
+          File "/usr/lib/python3/dist-packages/cloudinit/sources/__init__.py", line 1052, in find_source
+            if s.update_metadata_if_supported(
+          File "/usr/lib/python3/dist-packages/cloudinit/sources/__init__.py", line 928, in update_metadata_if_supported
+            result = self.get_data()
+          File "/usr/lib/python3/dist-packages/cloudinit/sources/__init__.py", line 484, in get_data
+            return_value = self._check_and_get_data()
+          File "/usr/lib/python3/dist-packages/cloudinit/sources/__init__.py", line 410, in _check_and_get_data
+            return self._get_data()
+          File "/usr/lib/python3/dist-packages/cloudinit/sources/DataSourceOracle.py", line 215, in _get_data
+            user_data = data["metadata"].get("user_data")
+        AttributeError: 'NoneType' object has no attribute 'get'
+    
+    The fix is to check if the metadata field's value is None, and if so,
+    treat it the same as if the field doesn't exist.
+
+commit ec1a7b023ded2d5b2b71205714c703b3e73779a4
+Author: Cade Jacobson <91996442+cadejacobson@users.noreply.github.com>
+Date:   Thu Nov 13 16:16:01 2025 -0800
+
+    Add retry logic to 500 errors for reprovision data (#6563)
+    
+    Removes the explicit exclusion of 500 errors from azure's
+    `fetch_reprovision_data()` function.  Returns the
+    RetryHandler to the default list of status codes to retry.
+    
+    Fixes GH-6562
+
+commit 57685d147625a2023fb5a713fb5480148b5bf3a9
+Author: dermotbradley <dermot_bradley@yahoo.com>
+Date:   Fri Nov 14 00:05:28 2025 +0000
+
+    fix(eni.py): correct resultant dns entries in eni file (#6535)
+    
+    Fix #6331 addressed rendering dns-nameserver and dns-search entries
+    into eni file. However whilst it did do checks for IPv4/IPv6 nameserver
+    addresses to not place these in an incorrect "inet"/"inet6" section it
+    did not ensure that empty "dns-nameserver" entries would not be create.
+    
+    This fix prevents "dns-nameserver" entries being placed in either
+    "inet"/"inet6" sections without any values.
+    
+    Also as a "dns-search" entry in a particular "inet"/"inet6" section
+    makes no sense if there is not also a "dns-nameserver" entry then it
+    ensures that such "dns-search" entries are not added.
+
+commit c66d5cf0426e7bea763212178a05bc76033742c7
+Author: Jan <77344313+jansdhillon@users.noreply.github.com>
+Date:   Thu Nov 13 16:54:10 2025 -0700
+
+    fix: distros link in README (#6574)
+    
+    Fixes GH-6573, GH-6564
+
+commit f3975e4011dc3ec14681ea815c9f125a03aead41
+Author: Alvaro Miranda Aguilera <kikitux+github@gmail.com>
+Date:   Tue Nov 11 19:48:54 2025 +0100
+
+    Fix URL scheme in deprecation message (#6565)
+
+commit f63bbbfa7f317107bc92e7e42da159e5d8974a9f
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Nov 11 10:33:43 2025 -0700
+
+    test: fix bug in tmp_path used as a callable for path join operation
+
+commit 3d495284ee51071016a11bba16a9da8a66a5324f
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Nov 11 10:25:54 2025 -0700
+
+    test: replace unittest.skip decorators with pytest equivalents
+    
+    Issue: When running tests with pytest, unittest-style skip decorators
+    raise unittest.case.SkipTest exceptions which pytest interprets as
+    FAILED rather than SKIPPED on non-unittest.TestCase classes. This
+    caused tests to incorrectly show as failures.
+    
+    Replace unittest.skipIf/skip with pytest.mark.skipif/skip to prevent
+    SkipTest exceptions from being treated as test failures.
+    
+    Fixes GH-6569
+
+commit cbad4501e16ebe1640bba510fb55ab51941156a3
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Thu Nov 6 00:16:48 2025 +0100
+
+    fix: typos in cloud-init clean --help (#6559)
+
+commit 3830ed6657c289e5b352f46104eef5f216cf3db5
+Author: Neha Pandey <nehapandey408@gmail.com>
+Date:   Fri Oct 31 20:27:06 2025 +0545
+
+    test(sources): Convert test_openstack.py from unittest to pytest (#6530)
+    
+    Refactored tests/unittests/sources/test_openstack.py to use pytest
+    instead of unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed test_helpers.TestCase inheritance from
+      TestVendorDataLoading class
+    - Replaced test_helpers.mock usage with from unittest import mock.
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit afe32c0231ed126b61dbd7a1bb9306c4e4dda933
+Author: Neha Pandey <nehapandey408@gmail.com>
+Date:   Fri Oct 31 20:20:24 2025 +0545
+
+    test(config): Convert test_cc_mcollective.py from unittest to pytest (#6531)
+    
+    Refactored tests/unittests/config/test_cc_mcollective.py to use
+    pytest instead of unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed t_help.TestCase inheritance from TestHandler class
+    - Converted self.assertTrue() to assert ... is True statements
+    - Converted self.assertEqual() to assert ... == ... statements
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit ef7d348078b49c86bdacd00744ff2cde026419c3
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Wed Oct 29 16:06:25 2025 -0600
+
+    doc: readthedocs.yaml needs to generate meson_version.py for cloud-init (#6550)
+    
+    Invoke meson setup from doc/rtd/conf.py to ensure the rendered
+    UPSTREAM_VERSION value is used from meson_version.py.
+    
+    Fix missing ninja dependency in doc-requirements.txt exposed by
+    readthedocs builds.
+    
+    Add visibility to READTHEDOCS environment variable to ensure
+    meson.build doesn't pull in unneeded dependencies such as udev
+    or bash-completion.
+    
+    Fixes GH-6547
+
+commit 10a0af061768f0e9432a84d5a1ed232937daca85
+Author: Louis Sautier <sautier.louis@gmail.com>
+Date:   Tue Oct 28 21:39:10 2025 +0100
+
+    fix: use correct tox testenv in PR template (#6543)
+
+commit d65c7dfd6cd7ab524ea62a465d8b8d35764a0d27
+Author: Marvin A. Ruder <github@mruder.dev>
+Date:   Tue Oct 28 20:29:35 2025 +0100
+
+    feat(ca_certs): add rocky to supported distros (#6540)
+    
+    Related: #6427
+    
+    Signed-off-by: Marvin A. Ruder <signed@mruder.dev>
+
+commit 9f971c472fbd5b6d6d75f4ca5fc94b6f0b9a2caa
+Author: sxt1001 <sxt1001@foxmail.com>
+Date:   Wed Oct 29 03:04:47 2025 +0800
+
+    delete openEuler in cc_rh_subscription (#6494)
+    
+    Fixes GH-6492
+
+commit 9e4c9d2fd3a2bb29d0939ea3233fb3fc6aacf4ee
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Wed Oct 29 00:07:55 2025 +0545
+
+    test: convert test_util.py from unit test to pytest (#6536)
+    
+    Refactored tests/unittests/test_util.py to use pytest instead
+    of unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance
+    - Refactored tests to use pytest tmp_path fixture for temp
+      directory handling
+    - Maintained all original test functionality
+    
+    Related: canonical#6427
+
+commit 0ffc297bf165dec7b713133b5845ec925b60e73d
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Tue Oct 28 10:03:01 2025 -0600
+
+    doc: update specific support docs for sru
+
+commit 979561e8b19255e39cd4116c71ab8852a3c3c710
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Mon Oct 27 14:14:15 2025 -0600
+
+    doc: migrate ubuntu_test_prerelease content into development/testing
+
+commit 5acf5247e327b153dfd45dd3cdb7c2d3f2808126
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Mon Oct 27 14:37:16 2025 -0600
+
+    test: update regex for rust-coreutils stat -c output using double quotes (#6500)
+    
+    Will be fixed in upstream rust-coreutils per
+    https://github.com/uutils/coreutils/issues/8789. But, this may take a
+    bit to SRU to Ubuntu Questing.
+
+commit 1b362514094215149d0eb3c304b706e728153f2c
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Sat Oct 25 19:50:55 2025 -0600
+
+    chore: packages SPEC files provide downstream_version instead of sed
+
+commit 1934004c7a62b166662984a1b1911de78eb85c5f
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Oct 23 16:33:55 2025 -0600
+
+    chore: runtime version set by meson build artifact cloudinit.meson_versions
+    
+    Allow for differentiation of downstream versions from upstream
+    cloud-init if necessary.
+    
+    Meson builds will generate cloudinit/meson_version.py from
+    meson_version.py.in in order to create two python variables:
+    
+    - UPSTREAM_VERSION which is set by meson.project_version in meson.build
+    - DOWNSTREAM_VERSION which is optionally defined by downstream packages
+      to specialize runtime versions reported by cloud-init in logs and at
+      the command line.
+    
+    Add meson option downstream_version which can be set to express
+    a unique downstream package version of cloud-init if needed:
+    
+     meson setup ... -Ddownstream_version=25.1~3g89001234-0ubuntu2
+    
+    Drop ./tools/read-version utility script from upstream and Makefile
+    target check_verison related to runtime versus packaged version check.
+    Downstreams can provide such package version checks in build tooling
+    such as SPEC files, debian/tests or other build scripts if necessary.
+    
+    Drop tools/test_tools.py which was only used to validate read-version
+    behavior for setuptools needs.
+    
+    Fixes GH-6389
+
+commit 599c1f3240e8a738355b4ea2dea63b86d28b8e30
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Sat Oct 25 12:02:19 2025 -0600
+
+    chore: update packages/brpm to avoid dependency on read-version
+
+commit 224eb50a33c6212cddea6a662990f0d49bcc5d82
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Oct 23 21:42:11 2025 -0600
+
+    chore: update packages/bddeb to avoid dependency on read-version
+
+commit a88c7002ff495a50ef65b28d9dc121c9c3792952
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Oct 23 17:43:32 2025 -0600
+
+    doc: update meson build example options
+
+commit bde544c988ec781dbc4c35ffd8fc97211c35d570
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Wed Oct 22 09:15:00 2025 +0545
+
+    test (config): Convert test_apt_conf_v1.py from unittest to  pytest (#6520)
+    
+    Refactored tests/unittests/config/test_apt_conf_v1.py to
+    use pytest instead of unittest.TestCase as part of the pytest
+    migration effort.
+    
+    - Removed unittest.TestCase inheritance
+    - Converted setUp() to pytest fixture for temporary files
+    - Parameterized proxy-related tests for cleaner duplication removal
+    - Replaced unittest assertions with plain pytest `assert` statements
+    - Replaced `_search_apt_config` as standalone helper function
+    - Maintained all original test functionality
+    
+    Related: canonical#6427
+
+commit 586ff7e4dbeb507b3662bef0dede9995e8813683
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Wed Oct 22 09:13:44 2025 +0545
+
+    test(distros): Convert test_user_data_normalize.py from unittest to pytest (#6518)
+    
+    Refactored tests/unittests/distros/test_user_data_normalize.py
+    to use pytest instead of unittest.TestCase as part of the pytest
+    migration effort.
+    
+    - Removed unittest.TestCase inheritance and `setUp` method
+    - Added pytest.mark.parametrize for repetitive user simple dict tests
+    - Replaced self.assert* calls with simple assert statements
+    - Maintained all original test functionality
+    
+    Related: canonical#6427
+    
+    * Fix assertions for pytest style
+      - Replaced `assert True == value` with `assert value`
+      - fixed incorrect assert "zetta", users with assert "zetta" in users
+    
+    * test: Be strict about boolean assertions to avoid passing unexpected truthy values
+
+commit e2ed42256b2d21d7e70d77fc47e9517880b2ae8d
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Wed Oct 22 00:00:39 2025 +0545
+
+    test: Convert test_schema.py to pytest (#6519)
+    
+    Refactored tests/unittests/config/test_schema.py to use
+    pytest instead of unittest.TestCase as part of the pytest
+    migration effort.
+    
+    - Removed unittest.TestCase inheritance
+    - Maintained all original test functionality
+    
+    Related: canonical#6427
+
+commit 7b70ce1d0493d1a9e7c202614c11dbb511bab5f4
+Author: Otto Kekäläinen <otto@kekalainen.net>
+Date:   Tue Oct 21 11:08:36 2025 -0700
+
+    doc: fix obvious spelling errors (#6506)
+    
+    Correct various spelling errors across documentation, comments, and code
+    to improve readability and maintain consistency. These typos were
+    identified by running:
+    
+        codespell --write-changes --check-filenames --check-hidden *
+    
+    This includes the following corrections:
+    
+    - absense -> absence
+    - adresses -> addresses
+    - alot -> a lot
+    - appropiate -> appropriate
+    - astrisk -> asterisk
+    - atleast -> at least
+    - atttributes -> attributes
+    - begining -> beginning
+    - bootup -> boot up
+    - configuraiton -> configuration
+    - Coverts -> Converts
+    - defition -> definition
+    - delimeted -> delimited
+    - directoty -> directory
+    - exis -> exist
+    - existance -> existence
+    - Exepected -> Expected
+    - exeption -> exception
+    - formated -> formatted
+    - (I|i)ncase -> in case
+    - indepedent -> independent
+    - intefaces -> interfaces
+    - invididual -> individual
+    - involes -> involves
+    - maching -> matching
+    - Niether -> Neither
+    - non-existance -> non-existence
+    - non-existant -> non-existent
+    - Nothin -> Nothing
+    - occured -> occurred
+    - outputing -> outputting
+    - overriden -> overridden
+    - parms -> params
+    - perferred -> preferred
+    - porpose -> purpose
+    - precendence -> precedence
+    - preferrable -> preferable
+    - removeing -> removing
+    - representd -> represented
+    - resilent -> resilient
+    - setted -> set
+    - soures -> sources
+    - sript -> script
+    - teh -> the
+    - thats -> that's
+    - Theses -> These
+    - varables -> variables
+    - Verifiy -> Verify
+    - wit -> with
+    
+    Additionally, re-flow some lines for the `ruff check` to not fail on
+    too long lines.
+
+commit 9a78efcff8ad6ec89097e43342b2478b252960dd
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Tue Oct 21 21:32:33 2025 +0545
+
+    test(distros): Convert test_ifconfig.py from unittest to pytest (#6517)
+    
+    Refactored tests/unittests/distros/test_ifconfig.py to use pytest instead of
+    unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance
+    - Refactored tests to use pytest fixtures instead of unittest setUp methods
+    - updated tests to receive fixtures as function arguments
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit 24c3950281e0ad455c2f68aa59c5bbcda713d4c9
+Author: Neha Pandey <nehapandey408@gmail.com>
+Date:   Tue Oct 21 08:35:38 2025 +0545
+
+    test(config): Convert test_cc_ca_certs.py from unittest to pytest (#6516)
+    
+    Refactored tests/unittests/config/test_cc_ca_certs.py to use pytest
+    instead of unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance from all test classes
+    - Converted setUp methods to pytest fixtures using tmp_path and
+       mocker
+    - Replaced self.assertEqual/assertTrue/assertFalse with bare assert
+      statements
+    - Removed ExitStack usage and CAMocks.reset() method
+    - Converted all looping tests to use @pytest.mark.parametrize for
+      cleaner, more pytest-idiomatic code
+    - Each test now runs once per distro (244 total tests)
+    - Replaced self.add_patch() with mocker.patch() from pytest-mock
+    - Added type annotation for class variable to satisfy mypy
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit 9db1cc8ef5db572e9154f1903127b84c4225c582
+Author: Neha Pandey <nehapandey408@gmail.com>
+Date:   Tue Oct 21 07:11:05 2025 +0545
+
+    test(config): Convert test_cc_spacewalk.py from unittest to pytest (#6515)
+    
+    Refactored tests/unittests/config/test_cc_spacewalk.py to use pytest
+    instead of unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance
+    - Removed unused helpers import
+    - Converted self.assertFalse() to strict boolean check (is False)
+    - Converted self.assertTrue() to strict boolean check (is True)
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit eb43d8e2d15809571b7ff7834ba1fc3584a05991
+Author: Otto Kekäläinen <otto@kekalainen.net>
+Date:   Fri Oct 17 08:33:31 2025 -0700
+
+    fix: Fix misspelled domain in landscape.canonical.com
+
+commit 1c44cffd8a979d80c309e35eea91ba16601a8965
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Fri Oct 17 21:05:04 2025 +0545
+
+    test: Convert test_alpine.py from unittest to pytest (#6514)
+    
+    Refactored tests/unittests/distros/test_alpine.py to use pytest instead of
+    unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance
+    - Maintained all original test functionality
+    
+    Related: canonical#6427
+
+commit bc966042d1c99a966d6d8eb5e91b82ccd722a0c2
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Fri Oct 17 21:03:12 2025 +0545
+
+    test(distros): Convert test_sysconfig.py from unittest to pytest (#6510)
+    
+    Refactored tests/unittests/distros/test_sysconfig.py to use pytest instead of
+    unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance and unused py 2.6 method
+    - Converted self.assert* methods to bare assert statements
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit c64fce382e06cf2b96db597459d223bd2b53d482
+Author: Neha Pandey <nehapandey408@gmail.com>
+Date:   Fri Oct 17 03:54:48 2025 +0545
+
+    test(distros): Convert test_hostname.py from unittest to pytest (#6511)
+    
+    Refactored tests/unittests/distros/test_hostname.py to use
+    pytest instead of unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed unittest import
+    - Removed TestCase inheritance
+    - Converted self.assertEqual() methods to bare assert statements
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit 92421c1dd0dec394127f622eecf05e6258d353f8
+Author: Neha Pandey <nehapandey408@gmail.com>
+Date:   Fri Oct 17 03:53:12 2025 +0545
+
+    test(sources): Convert test_common.py from unittest to pytest (#6512)
+    
+    Refactored tests/unittests/sources/test_common.py to use pytest instead of
+    unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance from both test classes
+    - Renamed ExpectedDataSources to TestExpectedDataSources for pytest discovery
+    - Converted self.assertEqual() methods to bare assert statements
+    - Converted self.assertTrue() to assert statement
+    - Converted self.assertNotEqual() to assert statement
+    - Converted self.assertIsNotNone() to assert statement
+    - Removed unused test_helpers import
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit 28f0114224afccb552ae0586cf2e88bd2ed06b23
+Author: Paul <44974737+paulober@users.noreply.github.com>
+Date:   Thu Oct 16 21:52:18 2025 +0100
+
+    feat(cc_raspberry_pi): Replace rpi-connect with usb-gadget support (#6466)
+    
+    feat(cc_raspberry_pi): Replace rpi-connect with usb-gadget support
+    
+    This commit replaces the rpi connect enablement with new
+    usb-gadget support because rpi-connect setup will be
+    moved outside cloud-init and having the option
+    to enable the usb gadget mode right in the cloud-init
+    config does simplify the setup for many.
+    
+    Also move raspberry_pi config module out of
+    cloud-init-init boot stage and into cloud-init-network
+    boot stage to ensure it is only run after D-BUS is
+    available.
+
+commit 94f5335879853d97017441bbbfb2e9df51382e2c
+Author: Paul <44974737+paulober@users.noreply.github.com>
+Date:   Thu Oct 16 21:46:32 2025 +0100
+
+    fix(raspberry-pi-os): keymap handling on Trixie-based images (#6483)
+    
+    This commit fixes keymap configuration on
+    Trixie-based Raspberry Pi OS images by aligning
+    behavior with raspi-config.
+    
+    It also removes growpart and resizefs from the
+    cloud-init configuration for Raspberry Pi OS,
+    as these functions are already provided by the
+    system and caused unnecessary duplication.
+
+commit e2715ef78c4bf541396c177642329da3628c36a4
+Author: Manish Sah <48799735+csemanish12@users.noreply.github.com>
+Date:   Tue Oct 14 03:56:18 2025 +0545
+
+    test: Convert test_resolv.py from unittest to pytest (#6504)
+    
+    Refactored tests/unittests/distros/test_resolv.py to use pytest instead of
+    unittest.TestCase as part of the pytest migration effort.
+    
+    - Removed TestCase inheritance
+    - Converted self.assert* methods to bare assert statements
+    - Replaced self.assertRaises with pytest.raises context manager
+    - Maintained all original test functionality
+    
+    Related: #6427
+
+commit c6a1d1f15cb7f5621bafdafc72eb467fc0c3506e
+Author: Paul <44974737+paulober@users.noreply.github.com>
+Date:   Wed Oct 8 05:11:00 2025 +0100
+
+    docs(cc_raspberry_pi): Better phrasing of config descriptions (#6488)
+    
+    Signed-off-by: paulober <paul.oberosler@raspberrypi.com>
+
+commit 83defe9e72ed13fa06384f74e808cea8c280f80e
+Author: dermotbradley <dermot_bradley@yahoo.com>
+Date:   Mon Oct 6 16:38:14 2025 +0100
+
+    fix: install doc files that were previously installed pre-Meson (#6501)
+    
+    The Meson-based installation does not install these text files whereas
+    the pre-Meson installation did, so reinstate them.
+
+commit 25e94e7c4a3d5140e6a8b38e0276563c73169363
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Thu Oct 2 00:49:17 2025 -0600
+
+    test: add regex to cope with stat link output double/single quotes (#6497)
+
+commit da47f5f211a79c504fcd13f9d86e1e0d8d90d62d
+Author: Chad Smith <chad.smith@canonical.com>
+Date:   Wed Oct 1 17:53:15 2025 -0600
+
+    feat(bsd): add FreeBSD support to Meson build (#6458)
+    
+    Add sysvinit_freebsd support to meson.build to enable generating
+    rc.d scripts from templates and installing into the proper
+    /usr/local/etc/rc.d directory.
+    
+    Update meson_options.txt to limit init_system choices to
+    sysvinit_openrc, systemd or sysvinit_freebsd.
+    Also, update tools/build-on-freebsd to use meson build operations.
+    
+    Update tools/read-dependencies and pkg-deps.json for freebsd support.
+
+commit eb2a559b7430d6a01789227f899674a0d43ddd85
+Author: Paul <44974737+paulober@users.noreply.github.com>
+Date:   Tue Sep 30 00:11:53 2025 +0100
+
+    docs(cc_timezone): Replace US/Eastern with America/New_York (#6496)
+    
+    Fixes GH-6495
+
+commit 743d1920aef6bfeba3ef275411822415cfcb7fad
+Author: Viktor Szépe <viktor@szepe.net>
+Date:   Mon Sep 29 11:37:23 2025 +0200
+
+    fix: Fix typos again (#6490)

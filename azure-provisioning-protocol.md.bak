@@ -1,0 +1,534 @@
+# Azure Provisioning Protocol — Field Reference
+
+This document catalogs all fields that `DataSourceAzure` reads from IMDS
+(Instance Metadata Service) and `ovf-env.xml`, along with their security and
+lifecycle properties.
+
+## Cloud-init Source Mapping
+
+| Current Source (Azure) | Cloud-init Source |
+|---|---|
+| MediaContent in CCF (OVF) | `ovf-env.xml` — `LinuxProvisioningConfigurationSet` |
+| HostingEnvironmentConfiguration in CCF (OVF) | `ovf-env.xml` — `LinuxProvisioningConfigurationSet` |
+| CRP InVMArtifactsProfileBlob | IMDS `compute` / `extended` endpoint |
+| NMAgent | IMDS `network` endpoint |
+
+## Source Prefixes
+
+The **Source Path(s)** column in the field table uses the following prefixes:
+
+| Prefix | Endpoint / Mechanism | Description |
+|---|---|---|
+| `IMDS:` | `http://169.254.169.254/metadata/instance?api-version=2021-08-01&extended=true` | Instance Metadata Service. HTTP GET with `Metadata: true` header. Provides compute, network, and extended metadata. Falls back to API version `2019-06-01` without `extended` if the newer version returns 400. |
+| `OVF:` | `/dev/sr0` provisioning media, or IMDS `/reprovisiondata` for PPS re-use | OVF environment XML. On initial provisioning, delivered via `/dev/sr0` (CDROM/ISO). On PPS re-use, fetched from IMDS `/reprovisiondata` endpoint. Parsed by `OvfEnvXml.parse_text()`. Contains `ProvisioningSection` and `PlatformSettingsSection` using the `wa:` (`http://schemas.microsoft.com/windowsazure`) namespace. |
+| `WS_GOALSTATE:` | `http://168.63.129.16/machine/?comp=goalstate` | GoalState XML fetched from the WireServer (`168.63.129.16`). Contains container and instance identifiers used for health reporting. |
+
+## Field Inventory
+
+> **Encryption note:** We could encrypt all customer data originating from
+> the control plane and leave data generated on the node unencrypted.
+
+| Field Name | Description / Notes | Source Path(s) | Can Be Changed After Provisioning |
+|---|---|---|---|
+| `adminUsername` | Default admin/system user name. | IMDS: `compute.osProfile.adminUsername`<br>OVF: `ProvisioningSection/LinuxProvisioningConfigurationSet/UserName` | Yes — via *Reset password* from portal |
+| `adminPassword` | Admin user password (plaintext). | OVF: `ProvisioningSection/LinuxProvisioningConfigurationSet/UserPassword` | Yes — via *Reset password* from portal |
+| `containerId` | Container identifier. Used in health reports and ready/failure signals sent back to the fabric. | WS_GOALSTATE: `Container/ContainerId` | No |
+| `customData` | User-provided provisioning payload (Base64-decoded on parse). | OVF: `ProvisioningSection/LinuxProvisioningConfigurationSet/CustomData` | No — for single VMs, custom data cannot be updated in the VM model. For VMSS, custom data can be updated with reimage. See [Custom data and Azure VMs](https://learn.microsoft.com/azure/virtual-machines/custom-data) and [Reimage a VM in a scale set](https://learn.microsoft.com/azure/virtual-machine-scale-sets/virtual-machine-scale-sets-reimage). |
+| `disablePasswordAuthentication` | Boolean controlling SSH password auth. Compared against string `"true"`. | IMDS: `compute.osProfile.disablePasswordAuthentication`<br>OVF: `ProvisioningSection/LinuxProvisioningConfigurationSet/DisableSshPasswordAuthentication` | No — see *Passwordless VMs* design |
+| `hasCustomData` | Boolean indicating whether the VM was configured with custom data. Used with config key `experimental_fail_on_missing_customdata` to detect and report failures when OVF is missing custom data that IMDS expects to be present. Added in [PR #6779](https://github.com/canonical/cloud-init/pull/6779). | IMDS: `extended.compute.hasCustomData` | No |
+| `hostname` | Also known as `compute.osProfile.computerName`. | IMDS: `compute.osProfile.computerName`<br>OVF: `ProvisioningSection/LinuxProvisioningConfigurationSet/HostName` | Yes — via `Rename-Computer` or `hostnamectl`, but does not change IMDS metadata. See [View and modify hostnames](https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/update-hostname). |
+| `location` | Azure region the VM is running in. | IMDS: `compute.location` | No |
+| `network.*` | Full network interface configuration (MAC addresses, IPv4/IPv6 addresses, subnet prefixes). No secrets — may need integrity protection. | IMDS: `network.interface[]` | Yes — network interface settings can be changed. See [Create, change, or delete Azure NICs](https://learn.microsoft.com/azure/virtual-network/virtual-network-network-interface). |
+| `platformFaultDomain` | Fault domain index for the VM. Exposed via `availability_zone` property. | IMDS: `compute.platformFaultDomain` | No |
+| `publicKeys.*` | SSH public keys. IMDS provides `keyData` in OpenSSH format. OVF provides `Fingerprint`, `Path`, and `Value` sub-elements per key — `Value` now contains the key material directly, making certificate retrieval unnecessary. | IMDS: `compute.publicKeys[].keyData`<br>OVF: `ProvisioningSection/LinuxProvisioningConfigurationSet/SSH/PublicKeys/PublicKey/{Fingerprint,Path,Value}` | Yes |
+| `preprovisionedVm` | Boolean indicating pre-provisioned VM mode. Default: `false`. | OVF: `PlatformSettingsSection/PlatformSettings/PreprovisionedVm` | No |
+| `preprovisionedVmType` | Also known as `compute.extended.ppsType`. Values: `RUNNING`, `SAVABLE`, `OS_DISK`, `NONE`. | IMDS: `extended.compute.ppsType`<br>OVF: `PlatformSettingsSection/PlatformSettings/PreprovisionedVMType` | No |
+| `provisionGuestProxyAgent` | Boolean enabling Azure Guest Proxy Agent. Default: `false`. | OVF: `PlatformSettingsSection/PlatformSettings/ProvisionGuestProxyAgent` | No |
+| `userData` | Data specified at VM creation for use during or after provisioning (Base64-encoded). Used as fallback when no OVF `customData` is provided. | IMDS: `compute.userData` | Yes — see [User data for Azure VMs](https://learn.microsoft.com/azure/virtual-machines/user-data). |
+| `vmId` | Unique VM identifier. | IMDS: `compute.vmId` | No |
+
+## Per-Boot Configuration (IMDS reads on every boot)
+
+Cloud-init queries IMDS on each boot to refresh instance metadata. These fields
+are read regardless of whether the VM has already been provisioned.
+
+| Field Name | Source |
+|---|---|
+| `adminUsername` | CRP InVMArtifactsProfileBlob |
+| `disablePasswordAuthentication` | CRP InVMArtifactsProfileBlob |
+| `hostname` | CRP InVMArtifactsProfileBlob |
+| `location` | CRP InVMArtifactsProfileBlob |
+| `platformFaultDomain` | CRP InVMArtifactsProfileBlob |
+| `publicKeys.*` | CRP InVMArtifactsProfileBlob |
+| `userData` | CRP InVMArtifactsProfileBlob |
+| `vmId` | CRP InVMArtifactsProfileBlob |
+| `hasCustomData` | CRP InVMArtifactsProfileBlob |
+| `ppsType` | CRP InVMArtifactsProfileBlob |
+| `network.*` | NMAgent |
+
+## Proposal: Eliminating ovf-env.xml
+
+The current provisioning flow depends on `ovf-env.xml` delivered via `/dev/sr0`
+(CDROM). This mechanism has several drawbacks: it requires mounting removable
+media, parsing XML with multiple namespaces, differs from the JSON-based
+IMDS already used for most metadata, and produces an intermediate XML file
+(`/var/lib/waagent/ovf-env.xml`) that must be persisted on disk — exposing
+secrets such as `adminPassword` and `customData` at rest. Additionally, the
+host must maintain a copy of the OVF document for as long as the guest may
+need it (e.g. across reboots before provisioning completes), tying up host-side
+resources for an indeterminate period. Below are two proposed approaches to
+replace it with IMDS-native JSON endpoints.
+
+### Option 1: New unified `/provisiondata` endpoint
+
+Introduce a new WireServer endpoint `/provisiondata` that serves all
+provisioning fields as JSON for both initial provisioning and PPS scenarios.
+The existing `/reprovisiondata` IMDS endpoint remains untouched for backwards
+compatibility.
+
+#### Endpoint specification
+
+The endpoint is served by WireServer (`168.63.129.16`), not IMDS. This takes
+advantage of the existing WireServer firewall rules that restrict access to
+root-only processes, preventing non-root processes from fetching sensitive
+provisioning data during early boot. Individual fields can optionally be
+fetched via `/provisiondata/<field>`.
+
+```
+# Fetch all provisioning data
+GET http://168.63.129.16/provisiondata?api-version=<version>
+
+# Fetch a single field
+GET http://168.63.129.16/provisiondata/customData?api-version=<version>
+GET http://168.63.129.16/provisiondata/adminPassword?api-version=<version>
+```
+
+**Required HTTP headers** (same as existing WireServer convention):
+
+| Header | Value | Purpose |
+|---|---|---|
+| `x-ms-agent-name` | `WALinuxAgent` | Agent identification (or future cloud-init identifier) |
+| `x-ms-version` | `2012-11-30` (or new version TBD) | API contract version |
+
+**API versioning:** A new `api-version` query parameter value is required
+(e.g. `2026-01-01`). WireServer must reject requests with older API versions
+that do not understand the `/provisiondata` path, returning `400 Bad Request`.
+
+#### Full response schema
+
+Response for full request (`/provisiondata`):
+
+```json
+{
+  "adminUsername": "azureuser",
+  "adminPassword": "<plaintext-password-or-null>",
+  "containerId": "a4f7e2b1-3c8d-4e5f-9a6b-7c8d9e0f1a2b",
+  "customData": "<base64-encoded-or-null>",
+  "disableAdmin": false,
+  "disablePasswordAuthentication": true,
+  "hasCustomData": true,
+  "hostname": "my-vm",
+  "location": "eastus",
+  "network": {
+    "interface": [
+      {
+        "ipv4": {
+          "ipAddress": [
+            {
+              "privateIpAddress": "10.0.0.22",
+              "publicIpAddress": ""
+            }
+          ],
+          "subnet": [
+            {
+              "address": "10.0.0.0",
+              "prefix": "24"
+            }
+          ]
+        },
+        "ipv6": {
+          "ipAddress": []
+        },
+        "macAddress": "000D3AFD5E71"
+      }
+    ]
+  },
+  "platformFaultDomain": "0",
+  "publicKeys": [
+    {
+      "keyData": "ssh-rsa AAAA...",
+      "path": "/home/azureuser/.ssh/authorized_keys"
+    }
+  ],
+  "preprovisionedVm": false,
+  "preprovisionedVmType": "None",
+  "provisionGuestProxyAgent": false,
+  "userData": "<base64-encoded-or-null>",
+  "vmId": "d5e6f7a8-1b2c-3d4e-5f6a-7b8c9d0e1f2a"
+}
+```
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `adminUsername` | string | Yes | Default admin/system user name. `null` when `disableAdmin` is `true` (no local admin account created). |
+| `adminPassword` | string | Yes | Admin user password (plaintext). `null` when no password is configured or when `disableAdmin` is `true`. |
+| `containerId` | string | No | Container identifier. Used in health reports and ready/failure signals sent back to the fabric. Replaces GoalState `Container/ContainerId`. |
+| `customData` | string | Yes | User-provided provisioning payload (Base64-encoded). `null` when not configured. |
+| `disableAdmin` | boolean | No | When `true`, no local admin account is created. `adminUsername` and `adminPassword` will be `null`. Default: `false`. |
+| `disablePasswordAuthentication` | boolean | No | Whether SSH password authentication should be disabled. |
+| `hasCustomData` | boolean | No | Whether the VM was configured with custom data. Used with `experimental_fail_on_missing_customdata` to detect missing custom data. |
+| `hostname` | string | No | VM computer name (maps to OVF `HostName` / IMDS `osProfile.computerName`). |
+| `location` | string | No | Azure region the VM is running in (e.g. `"eastus"`). |
+| `network` | object | No | Full network interface configuration. Contains `interface[]` array with per-NIC `ipv4` (addresses + subnets), `ipv6` (addresses), and `macAddress`. Same structure as IMDS `network`. |
+| `platformFaultDomain` | string | No | Fault domain index for the VM. Exposed via `availability_zone` property. |
+| `publicKeys` | array | No | SSH public keys. Each element contains `keyData` (OpenSSH format) and `path` (target file path). Empty array when no keys configured. Same key material as OVF `Value` and IMDS `keyData`. |
+| `preprovisionedVm` | boolean | No | Whether the VM is pre-provisioned. |
+| `preprovisionedVmType` | string | No | PPS type enum: `"None"`, `"Running"`, `"Savable"`, `"PreprovisionedOSDisk"`. |
+| `provisionGuestProxyAgent` | boolean | No | Whether Azure Guest Proxy Agent should be enabled. |
+| `userData` | string | Yes | Data specified at VM creation for use during or after provisioning (Base64-encoded). `null` when not configured. |
+| `vmId` | string | No | Unique VM identifier. |
+
+Response for single-field requests — the body is the field's JSON value
+directly (no wrapper object). `Content-Type` is always `application/json`.
+
+```
+GET /provisiondata/customData
+→  "PGJhc2U2ND4="
+
+GET /provisiondata/adminPassword
+→  "hunter2"
+
+GET /provisiondata/disablePasswordAuthentication
+→  true
+
+GET /provisiondata/publicKeys
+→  [{"keyData": "ssh-rsa AAAA...", "path": "/home/azureuser/.ssh/authorized_keys"}]
+
+GET /provisiondata/hostname
+→  "my-vm"
+```
+
+Nullable fields return `null` when not configured (e.g. `GET /provisiondata/adminPassword` → `null`).
+
+#### HTTP status codes
+
+| Code | Condition | Retryable? |
+|---|---|---|
+| `200 OK` | Provisioning data returned successfully. | N/A |
+| `400 Bad Request` | Unrecognized `api-version` or malformed request. | No |
+| `404 Not Found` | VM has already reported ready — endpoint is permanently disabled post-provisioning. Also returned for unknown single-field paths (e.g. `/provisiondata/badField`). | **No** — do not retry; fall back to cached data. |
+| `429 Too Many Requests` | Rate-limited — client should retry with backoff. | Yes |
+| `500 Internal Server Error` | Transient server error. | Yes |
+| `503 Service Unavailable` | Provisioning data is not yet staged by the host — WireServer is not ready to serve it. May include a `Retry-After` header. | Yes — retry with backoff (honour `Retry-After` if present). |
+
+#### Security model
+
+| Concern | Mitigation |
+|---|---|
+| **Network access** | WireServer (`168.63.129.16`) is reachable only from the guest via host-level networking. The existing `iptables`/`nftables` firewall rules restrict WireServer access to `root`-only processes (`-m owner --uid-owner 0`). Non-root processes cannot reach the endpoint. |
+| **Provisioning state gating** | WireServer returns `200` only while the VM has **not** yet reported ready. After the ready signal is sent, the endpoint returns `404`. This ensures secrets (`adminPassword`, `customData`) are not accessible post-provisioning. |
+| **Secrets in transit** | Data travels over the host-guest virtual network fabric (not a physical network). The same trust boundary applies as the current OVF-over-CDROM and WireServer GoalState mechanisms. |
+| **Secrets at rest** | Cloud-init never persists `adminPassword` to disk in cleartext (hashed before storage, redacted in cached OVF). `customData` is written to instance data with restricted permissions (`0600`). The same handling applies regardless of the source endpoint. |
+| **Per-field access** | Callers that need only non-sensitive fields can avoid fetching secrets entirely by using the single-field sub-paths. |
+
+#### Provisioning flow — initial provisioning (PPS type = NONE)
+
+This replaces the current OVF-over-CDROM flow and IMDS metadata queries.
+All provisioning data, including network configuration, comes from
+`/provisiondata`.
+
+```
+Boot
+ │
+ ├─ 1. DS Detect
+ │     Check DMI chassis-asset-tag == "7783-7084-3265-9085-8269-3286-77"
+ │     (No /dev/sr0 or OVF seed check required)
+ │
+ ├─ 2. Setup ephemeral DHCP networking
+ │     Timeout: 20 minutes
+ │     Acquire lease on primary NIC
+ │     Extract WireServer IP from DHCP option 245
+ │       (default: 168.63.129.16)
+ │
+ ├─ 3. (Optional) Check Azure Proxy Agent status
+ │     /usr/bin/azure-proxy-agent --status --wait 120
+ │
+ ├─ 4. Fetch provisioning data from WireServer
+ │     GET http://168.63.129.16/provisiondata?api-version=<version>
+ │     Headers: x-ms-agent-name, x-ms-version
+ │     Retry: on 429/500/503, up to 300-second deadline
+ │       (honour Retry-After header from 503)
+ │     On 404: VM already provisioned — stop retrying,
+ │       use cached data
+ │
+ ├─ 5. Use containerId from /provisiondata for health reporting
+ │     (No GoalState fetch needed — containerId is included
+ │      in /provisiondata)
+ │
+ ├─ 6. Report ready to fabric
+ │     POST http://168.63.129.16/machine?comp=health
+ │     Body: Health XML with State=Ready,
+ │       ContainerId from /provisiondata
+ │     (No ISO ejection — /dev/sr0 not mounted)
+ │
+ ├─ 7. Teardown ephemeral networking
+ │
+ └─ 8. Apply configuration
+       Set hostname, create user, configure SSH keys,
+       set/hash password, run user-data/custom-data
+```
+
+**Key difference from today:** GoalState is no longer needed —
+`containerId` is included directly in the `/provisiondata` response.
+
+#### Provisioning flow — PPS RUNNING (hot-swap with vnet switch)
+
+```
+Boot
+ │
+ ├─ 1. DS Detect + ephemeral DHCP networking
+ │
+ ├─ 2. Fetch /provisiondata from WireServer
+ │     → preprovisionedVm=true, preprovisionedVmType="Running"
+ │
+ ├─ 3. Create reported_ready marker file
+ │     Path: {cloud_dir}/data/reported_ready
+ │     Content: "{pid}: {timestamp}"
+ │
+ ├─ 4. Report ready to fabric (source VM context)
+ │     POST health report with State=Ready
+ │
+ ├─ 5. Wait for vnet switch
+ │     Create netlink socket
+ │     Wait for media disconnect + reconnect on primary NIC
+ │       (netlink.wait_for_media_disconnect_connect)
+ │
+ ├─ 6. Teardown source ephemeral networking
+ │
+ ├─ 7. Re-acquire DHCP on re-attached NIC (destination context)
+ │     Timeout: 5 minutes per attempt, retry until success
+ │
+ ├─ 8. Fetch /provisiondata from WireServer (destination context)
+ │     Contains the new VM's provisioning data
+ │     → preprovisionedVm=false (or new PPS state)
+ │
+ ├─ 9. Fetch IMDS instance metadata (destination context)
+ │
+ ├─ 10. Report ready to fabric (destination context)
+ │
+ ├─ 11. Cleanup reported_ready marker file
+ │
+ └─ 12. Teardown ephemeral networking + apply configuration
+```
+
+#### Provisioning flow — PPS SAVABLE (suspend/resume with NIC hot-attach)
+
+```
+Boot
+ │
+ ├─ 1. DS Detect + ephemeral DHCP networking
+ │
+ ├─ 2. Fetch /provisiondata from WireServer
+ │     → preprovisionedVmType="Savable"
+ │
+ ├─ 3. Create reported_ready marker file
+ │
+ ├─ 4. Report ready to fabric (expect transient URL errors)
+ │
+ ├─ 5. Teardown ephemeral networking (ignore errors)
+ │
+ ├─ 6. Wait for NIC detach event
+ │     (netlink.wait_for_nic_detach_event)
+ │
+ ├─ 7. Wait for new primary NIC hot-attach
+ │     (netlink.wait_for_nic_attach_event)
+ │
+ ├─ 8. Setup ephemeral DHCP on new NIC
+ │
+ ├─ 9. Fetch /provisiondata from WireServer (destination context)
+ │
+ ├─ 10. Fetch IMDS instance metadata (destination context)
+ │
+ ├─ 11. Report ready to fabric (destination context)
+ │
+ ├─ 12. Cleanup marker + teardown + apply configuration
+```
+
+#### Provisioning flow — PPS OS_DISK (shutdown and redeploy)
+
+```
+Boot
+ │
+ ├─ 1. DS Detect + ephemeral DHCP networking
+ │
+ ├─ 2. Fetch /provisiondata from WireServer
+ │     → preprovisionedVmType="PreprovisionedOSDisk"
+ │
+ ├─ 3. Report ready to fabric
+ │
+ ├─ 4. Wait for platform shutdown (sleep indefinitely)
+ │     Cloud-init sleeps for 31536000 seconds (1 year)
+ │     Platform shuts down VM externally
+ │
+ └─ On next boot: normal initial provisioning flow
+     (marker file absent, PPS type = NONE)
+```
+
+#### Provisioning flow — PPS UNKNOWN (recovery reprovisioning)
+
+```
+Boot (after previous reported_ready marker exists)
+ │
+ ├─ 1. DS Detect + ephemeral DHCP networking
+ │
+ ├─ 2. Detect marker file exists → PPS type = UNKNOWN
+ │
+ ├─ 3. Report ready to fabric (if not already reported)
+ │
+ ├─ 4. Fetch /provisiondata from WireServer
+ │     (If 404, VM already provisioned — use cached data)
+ │
+ ├─ 5. Fetch IMDS metadata
+ │
+ ├─ 6. Cleanup marker + teardown + apply configuration
+```
+
+#### Error handling
+
+Cloud-init reports provisioning failures through two channels. The same
+reporting mechanism is used regardless of whether data came from
+`/provisiondata` or the legacy OVF flow.
+
+| Channel | Mechanism | Details |
+|---|---|---|
+| **KVP (host)** | `report_via_kvp()` → `/var/opt/hyperv/.kvp_pool_*` | Always attempted. Encoded as `result=error\|success`, `reason=<error-reason>`, `agent=Cloud-Init/<version>`, `vm_id=<vm-id>`, `timestamp=<UTC-ISO>`, `documentation_url=https://aka.ms/linuxprovisioningerror`. |
+| **WireServer (fabric)** | POST health report with `State=NotReady`, `SubStatus=ProvisioningFailed` | Attempted if networking is available. If networking is down, cloud-init tears down current networking, attempts new DHCP (20-minute timeout), then reports. |
+
+**Retry strategy for `/provisiondata`:**
+
+| Parameter | Value |
+|---|---|
+| Retry HTTP codes | `429`, `500`, `503` |
+| Retry deadline | 300 seconds from first request |
+| Backoff | Exponential, starting at 1 second. Honour `Retry-After` header from `503` responses when present. |
+| Max connection errors | 11 (if no route configured for WireServer), unlimited otherwise |
+| Non-retryable codes | `400` (bad API version), `404` (already provisioned — **do not retry**) |
+
+**Error classes relevant to `/provisiondata`:**
+
+- `ReportableErrorImdsUrlError` — adapted or new class for WireServer URL
+  errors (HTTP code, duration).
+- `ReportableErrorOvfParsingException` — replaced by a new
+  `ReportableErrorProvisionDataParsingException` for JSON parse failures.
+- `ReportableErrorOvfInvalidMetadata` — replaced by a new
+  `ReportableErrorProvisionDataInvalidMetadata` for missing or invalid fields.
+
+#### Backward compatibility and migration
+
+| Concern | Approach |
+|---|---|
+| **Detecting endpoint availability** | Cloud-init attempts `GET /provisiondata?api-version=<version>` first. If WireServer returns `400` (unrecognized API version) or connection refused, fall back to the legacy OVF-over-CDROM flow. |
+| **Legacy VMs** | Existing VMs that have already provisioned will never call `/provisiondata`. The endpoint returns `404` post-provisioning regardless. |
+| **Mixed fleets** | Cloud-init ships both code paths. The `/provisiondata` path is attempted first; on failure, the `/dev/sr0` OVF path is used. A `datasource.Azure.provisioning_source` config key (`provisiondata` \| `ovf` \| `auto`) can override detection. Default: `auto`. |
+| **`/reprovisiondata` coexistence** | The existing IMDS `/reprovisiondata` endpoint continues to work for PPS scenarios during the migration period. Once all PPS types are migrated to use `/provisiondata` in the destination context, `/reprovisiondata` can be deprecated. |
+| **GoalState** | No longer required — `containerId` is now included in `/provisiondata`. During migration, cloud-init falls back to GoalState if `/provisiondata` is unavailable. |
+
+#### What `/provisiondata` replaces and what it does not
+
+| Current mechanism | Replaced by `/provisiondata`? | Notes |
+|---|---|---|
+| `/dev/sr0` OVF-env.xml mount + XML parsing | **Yes** | All fields from `ProvisioningSection` and `PlatformSettingsSection` are served as JSON. |
+| IMDS `/metadata/instance` | **Yes** | All fields including `network.*`, `vmId`, `location`, `platformFaultDomain`, `userData`, `osProfile`, and `extended` flags are included in `/provisiondata`. IMDS is no longer queried during provisioning. |
+| WireServer GoalState (`/machine/?comp=goalstate`) | **Yes** | `containerId` is included in `/provisiondata`. GoalState fetch is no longer needed. |
+| GoalState certificate retrieval | **N/A** | OVF already provides key material via `Value` elements — certificate retrieval is no longer used. `/provisiondata` continues to provide keys directly via `keyData`. |
+| WireServer health reports (`/machine?comp=health`) | **No** | Health reporting is unchanged. |
+| IMDS `/reprovisiondata` | **Eventually** | Coexists during migration. PPS flows can use `/provisiondata` in the destination context instead. |
+
+#### Advantages
+
+- Single JSON request replaces OVF XML parsing entirely — eliminates the
+  `OvfEnvXml` parser, XML namespace handling (`wa:`, `dmtf:`), and the
+  `defusedxml` dependency for this code path.
+- Same endpoint works for both initial provisioning and PPS re-use across all
+  PPS types (RUNNING, SAVABLE, OS_DISK).
+- No `/dev/sr0` mount required — eliminates ISO device discovery, UDF/ISO9660
+  filesystem mounting, CDROM ejection, and the host-side requirement to
+  maintain a copy of the OVF document for the lifetime of provisioning.
+- SSH public keys are provided as `keyData` directly, consistent with OVF
+  `Value` elements and IMDS `keyData` — no format conversion needed.
+- Endpoint is gated on provisioning state (returns `404` after ready signal),
+  so secrets are not accessible post-provisioning.
+- Per-field sub-paths (`/provisiondata/adminPassword`,
+  `/provisiondata/customData`) allow fetching only the secrets needed,
+  reducing exposure surface.
+- JSON schema is self-documenting and strongly typed — no ambiguity around
+  boolean-as-string (`"true"` vs `true`) that exists in the current OVF XML.
+- Leverages existing WireServer firewall rules (`root`-only `iptables` rules)
+  — no new network access control infrastructure required.
+
+#### Disadvantages
+
+- Secrets (`adminPassword`, `customData`) are returned when requesting the full
+  `/provisiondata` response, even if the caller doesn't need them — use
+  per-field sub-paths to mitigate.
+- Requires WireServer to serve provisioning data before the VM reports ready,
+  which may have ordering implications with how WireServer currently stages
+  GoalState data.
+- The endpoint must be gated on provisioning state — WireServer returns the
+  data only while the VM has not yet reported ready, and returns `404`
+  afterwards. This adds state-tracking responsibility to WireServer.
+- Requires maintaining two code paths (JSON `/provisiondata` + legacy OVF XML)
+  during the migration period until all Azure regions and VM types support the
+  new endpoint.
+- WireServer must assemble all provisioning fields into a single JSON
+  response, even though they originate from different host-side sources
+  (CRP, NMAgent, etc.). This may require coordination on the host side.
+
+### Option 2: Split sensitive fields into on-demand WireServer endpoints
+
+Keep non-sensitive provisioning fields in the existing IMDS instance metadata
+(most are already there), and add two new WireServer endpoints for the secrets
+that are fetched only when needed:
+
+```
+GET http://168.63.129.16/provisiondata/customData?api-version=<version>
+GET http://168.63.129.16/provisiondata/adminPassword?api-version=<version>
+```
+
+The client uses existing IMDS extended metadata flags to decide whether to
+fetch each endpoint:
+
+| Flag | IMDS Path | Controls |
+|---|---|---|
+| `hasCustomData` | `extended.compute.hasCustomData` | Fetch `/provisiondata/customData` only when `true` |
+| `hasAdminPassword` | `extended.compute.hasAdminPassword` (**new**) | Fetch `/provisiondata/adminPassword` only when `true` |
+
+Flow:
+
+1. Query IMDS `/metadata/instance?extended=true` (already done today).
+2. If `extended.compute.hasCustomData == true`, fetch WireServer `/provisiondata/customData`.
+3. If `extended.compute.hasAdminPassword == true`, fetch WireServer `/provisiondata/adminPassword`.
+4. All other provisioning fields (`adminUsername`, `hostname`,
+   `disablePasswordAuthentication`, `publicKeys`, `preprovisionedVm`,
+   `preprovisionedVmType`, `provisionGuestProxyAgent`) are already available
+   in IMDS instance metadata or OVF `PlatformSettingsSection` and would need
+   to be surfaced through IMDS as well.
+
+**Advantages:**
+
+- Secrets are fetched only when present, reducing exposure surface.
+- Non-sensitive fields are already served by IMDS — minimal new work.
+- `hasAdminPassword` follows the same pattern as the existing `hasCustomData`.
+- Like Option 1, the `/provisiondata/customData` and
+  `/provisiondata/adminPassword` endpoints are disabled after the VM reports
+  ready, so secrets are not accessible post-provisioning.
+
+**Disadvantages:**
+
+- Requires a new IMDS flag (`hasAdminPassword`) and two new WireServer
+  endpoints.
+- The secret endpoints must be gated on provisioning state (same state-tracking
+  requirement as Option 1).
+- `PlatformSettingsSection` fields (`preprovisionedVm`,
+  `preprovisionedVmType`, `provisionGuestProxyAgent`) would also need IMDS
+  equivalents if `/dev/sr0` is fully eliminated.

@@ -1,0 +1,39 @@
+# cloud-init 26.1 changelog for Azure
+
+## Bug Fixes
+
+- fix(azure): ensure ephemeral networking uses primary NIC (#6556)
+  When ephemeral networking is brought up, the selected interface could be
+  None under certain conditions. A new find_primary_nic() helper uses
+  net.find_candidate_nics() to select the primary NIC. Also logs MAC
+  address and driver for debugging, and retries DHCP with the current
+  primary NIC. (Fixes #6558)
+
+- Add retry logic to 500 errors for reprovision data (#6563)
+  Removes the explicit exclusion of 500 errors from fetch_reprovision_data(),
+  restoring the default retry behavior for IMDS 500 responses. (Fixes #6562)
+
+- fix(azure): round duration field in FinishReportingEvent to four decimal
+  places (#6709)
+
+## Features
+
+- feat(azure): add vm_id to KVP telemetry event keys (#6551)
+  Adds VM ID to the KVP event key format to improve telemetry tracking and
+  debugging for Azure/Hyper-V deployments.
+
+- feat(dhcp): enable --debug option for dhcpcd (#6693)
+  Adds --debug to dhcpcd invocations to capture detailed DHCP flow
+  (DISCOVER/REQUEST timing), motivated by Azure networking debugging needs.
+
+## Test Improvements
+
+- test(azure): run pubkey extraction and certificate parsing tests (#6572)
+  Enables test_pubkey_extract and test_parse_certificates to run in CI.
+  (Fixes #6571)
+
+- tests: skip azure ssh-keygen unittests when ssh-keygen not installed (#6612)
+
+- test: Skip Azure openssl tests on non-Linux
+
+- test: hardcode passlib usage in Azure test

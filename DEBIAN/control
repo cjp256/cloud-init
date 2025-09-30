@@ -1,0 +1,12 @@
+Package: linux-image-6.8.12-decui.decui.2026.0401.0002
+Source: linux-upstream
+Version: 6.8.12-g78378bd52804-20
+Architecture: amd64
+Maintainer: root <root@decui-u2204-tvm-kdump-2603.hpv3j4m133vuzcvco5qaatmrnb.phxx.internal.cloudapp.net>
+Installed-Size: 36819
+Section: kernel
+Priority: optional
+Homepage: https://www.kernel.org/
+Description: Linux kernel, version 6.8.12-decui.decui.2026.0401.0002
+ This package contains the Linux kernel, modules and corresponding other
+ files, version: 6.8.12-decui.decui.2026.0401.0002.
