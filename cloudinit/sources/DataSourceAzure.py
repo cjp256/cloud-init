@@ -1457,7 +1457,22 @@ class DataSourceAzure(sources.DataSource):
         :returns: List of SSH keys, if requested.
         """
         report_dmesg_to_kvp()
-        kvp.report_success_to_host(vm_id=self._vm_id)
+        # HACK: FORCE ALL DEPLOYMENT FAILURE (OSPTO)
+        self._report_failure(
+            errors.ReportableError(
+                reason="forced deployment failure for testing purposes after OSPTO",
+                supporting_data=dict(
+                    details="ignore me, i'm a failure",
+                    details2="but... my mom says i'm a winner",
+                    csvcheck="this,is'fine|toparse~!@#$%^&*()[]\\{}|;':\",./<>?x\nnew\r\nline",
+                ),
+            ),
+            host_only=True,
+        )
+
+        return []
+
+        kvp.report_success_to_host()
 
         try:
             data = get_metadata_from_fabric(
