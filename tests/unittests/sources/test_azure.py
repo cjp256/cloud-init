@@ -5427,11 +5427,92 @@ class TestValidateIMDSMetadata:
 
 
 class TestDependencyFallback:
-    def test_dependency_fallback(self):
-        """Ensure that crypt/passlib import failover gets exercised on all
-        Python versions
+    def _verify_sha512_hash_format(self, hashed_password):
+        """Helper to verify that the hashed password is in SHA-512 format."""
+        assert hashed_password.startswith("$6$"), (
+            f"unexpected hash format: {hashed_password}"
+        )
+        assert len(hashed_password) > 90, "hash size too short"
+
+    def test_hash_password_with_dependencies_available(self):
+        """Test that hash_password works when dependencies are available."""
+        hashed_password = dsaz.hash_password("test_password")
+        self._verify_sha512_hash_format(hashed_password)
+
+    def test_hash_password_raises_missing_dependency_error(self):
+        """Test that hash_password raises ReportableErrorMissingDependency
+        when both crypt and passlib are unavailable.
         """
-        assert dsaz.encrypt_pass("`")
+        original_import = __builtins__["__import__"]
+
+        def mock_import(name, *args, **kwargs):
+            if name in ("crypt", "passlib.hash", "passlib"):
+                raise ImportError(f"No module named '{name}'")
+            return original_import(name, *args, **kwargs)
+
+        with mock.patch("builtins.__import__", side_effect=mock_import):
+            with pytest.raises(
+                errors.ReportableErrorMissingDependency
+            ) as exc_info:
+                dsaz.hash_password("test_password")
+            assert exc_info.value.reason == "missing dependency=passlib"
+
+    def test_hash_password_uses_crypt_when_available(self):
+        """Test with real crypt, if available."""
+        try:
+            import crypt
+        except ImportError:
+            # crypt not available, skip test.
+            return
+
+        hashed_password = dsaz.hash_password("test")
+        self._verify_sha512_hash_format(hashed_password)
+
+    def test_hash_password_uses_crypt_when_available_mocked(self):
+        """Test with mocked crypt, always."""
+        mock_hash = passlib.hash.sha512_crypt.hash("test")
+        with mock.patch("crypt.crypt", return_value=mock_hash) as mock_crypt:
+            hashed_password = dsaz.hash_password("test")
+            mock_crypt.assert_called_once()
+            assert hashed_password == mock_hash
+            self._verify_sha512_hash_format(hashed_password)
+
+
+    def test_hash_password_falls_back_to_passlib(self):
+        """Test that hash_password falls back to passlib when crypt is unavailable."""
+        original_import = __builtins__["__import__"]
+
+        def mock_import(name, *args, **kwargs):
+            if name == "crypt":
+                raise ImportError("No module named 'crypt'")
+            return original_import(name, *args, **kwargs)
+
+        with mock.patch("builtins.__import__", side_effect=mock_import):
+            with mock.patch.object(
+                passlib.hash.sha512_crypt, "hash", wraps=passlib.hash.sha512_crypt.hash
+            ) as wrapped_passlib:
+                hashed_password = dsaz.hash_password("test")
+
+                wrapped_passlib.assert_called_once_with("test")
+                self._verify_sha512_hash_format(hashed_password)
+
+    def test_read_azure_ovf_raises_missing_dependency_for_password(self):
+        content = construct_ovf_env(username="testuser", password="test")
+
+        original_import = __builtins__["__import__"]
+
+        def mock_import(name, *args, **kwargs):
+            if name in ("crypt", "passlib.hash", "passlib"):
+                raise ImportError(f"No module named '{name}'")
+            return original_import(name, *args, **kwargs)
+
+        with mock.patch("builtins.__import__", side_effect=mock_import):
+            with pytest.raises(
+                errors.ReportableErrorMissingDependency
+            ) as exc_info:
+                dsaz.read_azure_ovf(content)
+
+            assert exc_info.value.reason == "missing dependency=passlib"
 
 
 class TestQueryVmId:

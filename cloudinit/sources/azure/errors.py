@@ -165,6 +165,11 @@ class ReportableErrorOsDiskPpsFailure(ReportableError):
         super().__init__("error waiting for host shutdown")
 
 
+class ReportableErrorMissingDependency(ReportableError):
+    def __init__(self, dependency_name: str) -> None:
+        super().__init__(f"missing dependency={dependency_name}")
+
+
 class ReportableErrorOvfInvalidMetadata(ReportableError):
     def __init__(self, message: str) -> None:
         super().__init__(f"unexpected metadata parsing ovf-env.xml: {message}")
