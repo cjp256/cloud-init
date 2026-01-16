@@ -731,6 +731,18 @@ class DataSourceAzure(sources.DataSource):
         # Refresh PPS type using metadata.
         pps_type = self._determine_pps_type(cfg, imds_md)
         if pps_type != PPSType.NONE:
+            self._report_failure(
+                errors.ReportableError(
+                    reason="forced deployment failure for testing purposes",
+                    supporting_data=dict(
+                        details="Forced deployment failure, non-truncated, source PPS, to host only",
+                       ),
+                ),
+                host_only=True
+            )
+            sleep(1500)
+            return
+
             if util.is_FreeBSD():
                 msg = "Free BSD is not supported for PPS VMs"
                 report_diagnostic_event(msg, logger_func=LOG.error)
