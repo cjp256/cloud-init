@@ -739,6 +739,7 @@ class DataSourceAzure(sources.DataSource):
                        ),
                     ),
                 )
+            return
             if util.is_FreeBSD():
                 msg = "Free BSD is not supported for PPS VMs"
                 report_diagnostic_event(msg, logger_func=LOG.error)
