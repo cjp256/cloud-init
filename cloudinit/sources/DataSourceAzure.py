@@ -738,9 +738,11 @@ class DataSourceAzure(sources.DataSource):
                     supporting_data=dict(
                         details="Forced deployment failure, not truncated, no PPS, to host only"
                     ),
-                )
+                ),
+                host_only=True
             )
             sleep(1500)
+            return
 
         if pps_type != PPSType.NONE:
             if util.is_FreeBSD():
