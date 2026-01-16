@@ -849,7 +849,7 @@ class DataSourceAzure(sources.DataSource):
                             ),
                         ),
                     )
-                return
+                    return
                 ssh_keys = self._report_ready(pubkey_info=pubkey_info)
             except Exception:
                 # Failed to report ready, but continue with best effort.
