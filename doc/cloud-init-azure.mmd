@@ -1,0 +1,237 @@
+---
+config:
+  layout: elk
+  elk:
+    "elk.algorithm": "layered"
+    "elk.direction": "DOWN"
+    "elk.layered.nodePlacement.bk.fixedAlignment": "LEFT"
+---
+flowchart TB
+    subgraph CLOUD_INIT_LOCAL["cloud-init-local.service"]
+        direction TB
+
+        START(["Start cloud-init-local.service"])
+        START --> DETECT_AZURE["Detect Azure platform"]
+
+        DETECT_AZURE --> DETECT_MEDIA["Detect Azure provisioning media"]
+
+        subgraph OVF_READ["Read OVF from provisioning media"]
+            DETECT_MEDIA --> TRY_OVF["Try reading ovf-env.xml from:<br>1. seed directory<br>2. /dev/sr0 (mount,parse,unmount)<br>3. /var/lib/waagent"]
+            TRY_OVF -- Found --> PARSE_OVF["Parse ovf-env.xml configuration"]
+            TRY_OVF -- Not found --> WARN_NO_OVF["Warn: Unable to find provisioning media, falling back to IMDS<br>metadata. Be aware that IMDS metadata does not support<br>admin passwords or custom-data (user-data only)."]
+        end
+
+        %% ------------------------------------------------------------------------
+        %% EPHEMERAL NETWORKING SETUP (REUSABLE PHASE)
+        %% ------------------------------------------------------------------------
+        subgraph NETWORKING["Ephemeral networking setup"]
+            NET_RETRY["<i>Retry loop</i>:<br>sleep: 1s between attempts<br>timeout: 20m provisioning / 5m reboot<br>report: status via KVP"]
+            NET_RETRY --> FIND_PRIMARY_NIC["Find primary network interface"]
+            FIND_PRIMARY_NIC -- "not found yet" --> NET_RETRY
+
+            FIND_PRIMARY_NIC --> DHCP_PRIMARY["Acquire DHCP lease on primary interface"]
+            DHCP_PRIMARY -- "no lease yet" --> NET_RETRY
+        end
+
+        PARSE_OVF --> FIND_PRIMARY_NIC
+        WARN_NO_OVF --> FIND_PRIMARY_NIC
+
+        DHCP_PRIMARY -- "lease acquired" --> GPA_CHECK{"Provision guest proxy agent?"}
+
+        %% ------------------------------------------------------------------------
+        %% GUEST PROXY AGENT (OPTIONAL)
+        %% ------------------------------------------------------------------------
+        GPA_CHECK -- FALSE --> IMDS_REQ_NEW
+        GPA_CHECK -- TRUE --> GPA_STATUS_WAIT["Wait for Azure guest proxy agent (up to 120s)"]
+        GPA_STATUS_WAIT --> IMDS_REQ_NEW
+
+        %% ------------------------------------------------------------------------
+        %% INSTANCE METADATA FETCH (IMDS)
+        %% ------------------------------------------------------------------------
+        subgraph IMDS_INSTANCE_METADATA["Fetch instance metadata from IMDS"]
+            IMDS_RETRY["<i>Retry loop</i>:<br>sleep: 1s between attempts<br>timeout: max 5m retry window<br>(connect timeout 30s, read timeout 30s)"]
+
+            IMDS_RETRY -- "new" --> IMDS_REQ_NEW["GET http://169.254.169.254/metadata/instance?api-version=2021-08-01&extended=true<br>Metadata: true<br>(connect timeout 30s, read timeout 30s)"]
+            IMDS_RETRY -- "fallback" --> IMDS_REQ_OLD["GET http://169.254.169.254/metadata/instance?api-version=2019-06-01<br>Metadata: true<br>(connect timeout 30s, read timeout 30s)"]
+
+            IMDS_REQ_NEW -- "HTTP 400 fallback" --> IMDS_REQ_OLD
+
+            IMDS_REQ_NEW --> IMDS_PARSE["Parse IMDS metadata"]
+            IMDS_REQ_OLD --> IMDS_PARSE
+
+            IMDS_REQ_NEW -- "conn/read/http error; retry new" --> IMDS_RETRY
+            IMDS_REQ_OLD -- "conn/read/http error; retry fallback" --> IMDS_RETRY
+        end
+
+        %% ------------------------------------------------------------------------
+        %% VALIDATE NETWORKING (WARNINGS)
+        %% ------------------------------------------------------------------------
+        subgraph VALIDATE_NETWORKING["Validate networking"]
+            IMDS_WARN_INCOMPLETE["Warn if IMDS network metadata incomplete"]
+            IMDS_WARN_NO_PRIMARY["Warn if IMDS network metadata missing primary NIC"]
+            IMDS_WARN_NO_NIC_CFG["Warn if IMDS network metadata missing NIC configs"]
+            IMDS_WARN_INCOMPLETE --> IMDS_WARN_NO_PRIMARY --> IMDS_WARN_NO_NIC_CFG
+        end
+
+        %% ------------------------------------------------------------------------
+        %% REPORT READY (EARLY)
+        %% ------------------------------------------------------------------------
+        subgraph REPORT_READY["Report ready"]
+            REPORT_READY_KVP["Report dmesg and provisioning success via KVP"]
+
+            REPORT_HEALTH_RETRY["<i>Retry loop</i>:<br>sleep: 1s between attempts<br>timeout: 20m retry window<br>(connect timeout 5s, read timeout 60s)"]
+            REPORT_HEALTH_WS["Report provisioning success to WireServer health endpoint<br>POST /provisioning/health"]
+
+            CLEANUP_MARKER["Remove report-ready marker if present"]
+
+            REPORT_READY_KVP --> REPORT_HEALTH_RETRY --> REPORT_HEALTH_WS --> CLEANUP_MARKER
+            REPORT_HEALTH_WS -- "conn/read/http error; retry" --> REPORT_HEALTH_RETRY
+        end
+
+        %% ------------------------------------------------------------------------
+        %% MERGE AZURE CONFIG INTO CLOUD-CONFIG (networking render at end)
+        %% ------------------------------------------------------------------------
+        subgraph MERGE_CLOUD_CONFIG["Merge Azure configuration into cloud-config"]
+            GET_USERDATA["Merge userdata_raw (OVF customData<br>or<br>IMDS userData)"]
+            SET_DEFAULT_USER["Merge default_user (name/lock/hashed passwd) from OVF/IMDS"]
+            SET_SSH_PWAUTH["Merge ssh_pwauth from OVF/IMDS disablePasswordAuthentication"]
+            SET_HOSTNAME["Merge local-hostname from OVF/IMDS"]
+            SET_PUBLIC_KEYS["Merge public-keys from IMDS publicKeys"]
+            SET_EPHEMERAL_DISK["Merge disk_setup + fs_setup for ephemeral0"]
+            NETCFG_RENDER["Render networking config"]
+
+            GET_USERDATA --> SET_DEFAULT_USER --> SET_SSH_PWAUTH --> SET_HOSTNAME --> SET_PUBLIC_KEYS --> SET_EPHEMERAL_DISK --> NETCFG_RENDER
+        end
+
+        %% ------------------------------------------------------------------------
+        %% PREPROVISIONING (PPS) — INLINE AND SELF-CONTAINED
+        %% ------------------------------------------------------------------------
+        IMDS_PARSE --> PPS_OR_MARKER{"Preprovisioned VM<br>or report-ready marker present?"}
+        PPS_OR_MARKER -- NO --> IMDS_WARN_INCOMPLETE
+        PPS_OR_MARKER -- YES --> PPS_TYPE
+
+        subgraph PPS_BLOCK["Preprovisioning (PPS) and reprovision handling"]
+            PPS_TYPE{"Preprovisioned VM type?"}
+
+            PPS_TYPE -- Running --> PPS_RUN_MARKER["Write report-ready marker"]
+            PPS_RUN_MARKER --> PPS_RUN_REPORT["Report READY to Azure (PPS)"]
+            PPS_RUN_REPORT --> PPS_RUN_WAIT_LINK["Wait for primary NIC link disconnect/connect event"]
+            PPS_RUN_WAIT_LINK --> REPROV_TEARDOWN
+
+            PPS_TYPE -- Savable --> PPS_SAV_MARKER["Write report-ready marker"]
+            PPS_SAV_MARKER --> PPS_SAV_REPORT["Report READY to Azure (PPS)"]
+            PPS_SAV_REPORT --> PPS_SAV_WAIT_NIC["Wait for primary NIC to be attached"]
+            PPS_SAV_WAIT_NIC --> REPROV_TEARDOWN
+
+            PPS_TYPE -- PreprovisionedOSDisk --> PPS_OS_REPORT["Report READY to Azure (PPS)"]
+            PPS_OS_REPORT --> PPS_OS_DONE["Wait for host-initiated VM shutdown (terminal)"]
+
+            PPS_TYPE -->|Unknown| REPROV_TEARDOWN
+
+            REPROV_TEARDOWN["Tear-down ephemeral networking"]
+            REPROV_SETUP["Setup ephemeral networking (<i>see Ephemeral networking setup</i>)"]
+            REPROV_TEARDOWN --> REPROV_SETUP
+
+            REPROV_SETUP --> REPROVISION_FETCH["GET http://169.254.169.254/<br>metadata/reprovisiondata?api-version=2019-06-01<br>Metadata: true<br>(connect timeout 30s, read timeout 30s)"]
+            REPROVISION_FETCH -->|connection error; retry unlimited| REPROV_RETRY
+
+            REPROV_RETRY["<i>Retry loop</i>:<br>sleep: 1s between attempts<br>timeout: unlimited<br>tear-down and re-setup ephemeral networking"]
+            REPROV_RETRY --> REPROV_TEARDOWN
+        end
+
+        %% Reprovision loop + return to IMDS
+        REPROVISION_FETCH --> IMDS_RETRY
+
+        %% ------------------------------------------------------------------------
+        %% NORMAL (NON-PPS) CONTINUATION: PARSE -> WARN -> REPORT READY -> MERGE
+        %% ------------------------------------------------------------------------
+        IMDS_WARN_NO_NIC_CFG --> REPORT_READY_KVP
+        CLEANUP_MARKER --> GET_USERDATA
+
+        %% ------------------------------------------------------------------------
+        %% CLOUD-INIT-LOCAL CONTINUATION
+        %% ------------------------------------------------------------------------
+        NETCFG_RENDER --> FINISH_LOCAL["Finish cloud-init-local.service"]
+
+        %% ------------------------------------------------------------------------
+        %% UNIFIED FAILURE HANDLING (MINIMIZED ARROWS; NO IMDS_REQ_OLD FAILURES)
+        %% (moved inside cloud-init-local.service)
+        %% ------------------------------------------------------------------------
+        subgraph FAILURE_HANDLING["Failure handling"]
+            direction TB
+            PROVISIONING_REPORT["Report failure via KVP<br>PROVISIONING_REPORT"] --> REPORT_FAIL_WS["Report failure to WireServer if networking is available"] --> FAILED(["Provisioning failed"])
+
+            FAIL_OVF_PARSE["ERROR:<br>reason=failed to parse ovf-env.xml"] --> PROVISIONING_REPORT
+
+            FAIL_NET_NOIF["ERROR:<br>reason=failure to find primary DHCP interface"] --> PROVISIONING_REPORT
+            FAIL_NET_NODHCP["ERROR:<br>reason=failure to obtain DHCP lease"] --> PROVISIONING_REPORT
+
+            FAIL_DHCLIENT["ERROR:<br>reason=failure to find dhclient"] --> PROVISIONING_REPORT
+
+            FAIL_GPA["ERROR:<br>reason=azure-proxy-agent not found<br>or<br>reason=azure-proxy-agent status failure"] --> PROVISIONING_REPORT
+
+            FAIL_IMDS_PARSE["ERROR:<br>reason=error parsing IMDS metadata"] --> PROVISIONING_REPORT
+
+            FAIL_IMDS_REQ["ERROR:<br>reason=connection timeout querying IMDS<br>or<br>reason=read timeout query IMDS<br>or<br>reason=http error querying IMDS<br>or<br>reason=unexpected error querying IMDS"] --> PROVISIONING_REPORT
+        end
+
+        %% Failure triggers (keep short/unlabeled to avoid “owning” the left lane)
+        PARSE_OVF -.-> FAIL_OVF_PARSE
+        NET_RETRY -.-> FAIL_NET_NOIF
+        NET_RETRY -.-> FAIL_NET_NODHCP
+        DHCP_PRIMARY -.-> FAIL_DHCLIENT
+        GPA_STATUS_WAIT -.-> FAIL_GPA
+        IMDS_PARSE -.-> FAIL_IMDS_PARSE
+        IMDS_REQ_NEW -.-> FAIL_IMDS_REQ
+        IMDS_REQ_OLD -.-> FAIL_IMDS_REQ
+
+        %% Visual styling for retry anchors (distinct from normal nodes and from each other)
+        classDef retryNet fill:#F5F5F5,stroke:#C9C9C9,stroke-width:1px,color:#333333
+        classDef retryImds fill:#F5F5F5,stroke:#BDBDBD,stroke-width:1px,color:#333333
+
+        %% Apply retry styles
+        class NET_RETRY retryNet
+        class IMDS_RETRY retryImds
+        class REPROV_RETRY retryImds
+        class REPORT_HEALTH_RETRY retryImds
+
+        %% ------------------------------------------------------------------------
+        %% Visual styling: shade cloud-init-local subgraphs for clarity
+        %% ------------------------------------------------------------------------
+        %% Outer container border (distinct from inner subgraphs)
+        style CLOUD_INIT_LOCAL fill:#FFFFFF,stroke:#9AA0A6,stroke-width:2px
+
+        %% Inner subgraphs: same border color to distinguish them from the container
+        style OVF_READ fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style NETWORKING fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style IMDS_INSTANCE_METADATA fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style VALIDATE_NETWORKING fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style REPORT_READY fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style MERGE_CLOUD_CONFIG fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style PPS_BLOCK fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+        style FAILURE_HANDLING fill:#F7F7FB,stroke:#D6D6E7,stroke-width:1px
+    end
+
+    %% ------------------------------------------------------------------------
+    %% POST cloud-init-local.service
+    %% ------------------------------------------------------------------------
+    FINISH_LOCAL --> WAIT_ONLINE["systemd-networkd-wait-online.service"]
+
+    subgraph CLOUD_INIT_SERVICE["cloud-init.service"]
+        INIT_MODULES["cloud_init_modules:<br>- seed_random<br>- bootcmd<br>- write_files<br>- growpart<br>- resizefs<br>- disk_setup<br>- mounts<br>- set_hostname<br>- update_hostname<br>- update_etc_hosts<br>- ca_certs<br>- rsyslog<br>- users_groups<br>- ssh<br>- set_passwords"]
+    end
+    WAIT_ONLINE --> INIT_MODULES
+
+    subgraph CLOUD_CONFIG_SERVICE["cloud-config.service"]
+        CLOUD_CONFIG_MODULES["cloud_config_modules:<br>- wireguard<br>- snap<br>- ubuntu_autoinstall<br>- ssh_import_id<br>- keyboard<br>- locale<br>- grub_dpkg<br>- apt_pipelining<br>- apt_configure<br>- ubuntu_pro<br>- ntp<br>- timezone<br>- disable_ec2_metadata<br>- runcmd<br>- byobu"]
+    end
+
+    subgraph CLOUD_FINAL_SERVICE["cloud-final.service"]
+        CLOUD_FINAL_MODULES["cloud_final_modules:<br>- package_update_upgrade_install<br>- fan<br>- landscape<br>- lxd<br>- ubuntu_drivers<br>- write_files_deferred<br>- puppet<br>- chef<br>- ansible<br>- mcollective<br>- salt_minion<br>- reset_rmc<br>- scripts_vendor<br>- scripts_per_once<br>- scripts_per_boot<br>- scripts_per_instance<br>- scripts_user<br>- ssh_authkey_fingerprints<br>- keys_to_console<br>- install_hotplug<br>- phone_home<br>- final_message<br>- power_state_change"]
+    end
+
+    %% Stage order after cloud-init-local.service
+    %% (ordering of intermediate systemd units may vary; listed alphabetically)
+    PRE_CLOUD_CONFIG_BOX["mnt.mount<br>network-online.target<br>sshd-keygen.service<br>sshd.service<br>sysinit.target<br>systemd-user-sessions.service<br>walinuxagent.service"]
+
+    INIT_MODULES --> PRE_CLOUD_CONFIG_BOX --> CLOUD_CONFIG_MODULES --> MULTI_USER_TARGET["multi-user.target"] --> CLOUD_FINAL_MODULES --> CLOUD_INIT_TARGET["cloud-init.target"]
