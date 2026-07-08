@@ -238,3 +238,66 @@ def fetch_reprovision_data() -> bytes:
         logger_func=LOG.debug,
     )
     return response.contents
+
+
+def fetch_provision_data(
+    retry_deadline: float,
+    max_connection_errors: Optional[int] = None,
+) -> bytes:
+    """Fetch ovf-env.xml from the IMDS /provisiondata endpoint.
+
+    Retries on 404 (data not written yet) and transient 5xx until
+    retry_deadline.  410 (Gone) is non-retriable and raises UrlError with code
+    410, as the provisioning data has already been deleted.  Non-transient
+    responses (e.g. 501 Not Implemented) are treated as non-retriable so that
+    callers fall back promptly on hosts that do not implement the endpoint.
+
+    :param retry_deadline: monotonic()-based deadline bounding 404/5xx retries.
+    :param max_connection_errors: Number of connection errors to tolerate
+        before giving up.  None retries connection errors until retry_deadline.
+
+    :raises UrlError: on error. A code of 410 indicates the data is gone
+        (non-retriable); a 404 at the deadline, a non-retriable code, or
+        exhausted connection errors indicate the endpoint did not serve data
+        and the caller should fall back to provisioning media.
+    """
+    url = IMDS_URL + "/provisiondata?api-version=2019-06-01"
+
+    # NOTE(provisiondata 404): Today IMDS answers with 404 on hosts that do
+    # not support this endpoint, which is indistinguishable from "data not
+    # written yet" -- and we cannot change that server behavior right now.  So
+    # 404 is retried until retry_deadline, which can add boot latency when the
+    # endpoint is reached on an unsupported host.  This is mitigated by the
+    # upstream default provisioning_data_source="prefer-media": media is used
+    # first, so the endpoint (and its 404) is only reached by media-less VMs.
+    # Only transient 5xx are retried; non-transient codes such as 501 (Not
+    # Implemented) are intentionally excluded so unsupported hosts fall back
+    # immediately.  Future: an unambiguous non-retriable "unsupported" signal
+    # from IMDS (distinct status code or header) would remove the 404 latency.
+    handler = ReadUrlRetryHandler(
+        logging_backoff=2.0,
+        max_connection_errors=max_connection_errors,
+        retry_codes=(
+            404,  # not written yet (see NOTE above re: unsupported hosts)
+            429,  # rate-limited/throttled
+            500,  # server error
+            502,  # bad gateway
+            503,  # service unavailable
+            504,  # gateway timeout
+        ),
+        retry_deadline=retry_deadline,
+    )
+    response = readurl(
+        url,
+        exception_cb=handler.exception_callback,
+        headers_cb=headers_cb,
+        infinite=True,
+        log_req_resp=False,
+        timeout=30,
+    )
+
+    report_diagnostic_event(
+        f"Polled IMDS provisiondata {handler._request_count+1} time(s)",
+        logger_func=LOG.debug,
+    )
+    return response.contents

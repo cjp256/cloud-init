@@ -910,3 +910,157 @@ class TestFetchReprovisionData:
         ]
         logs = [t[2] for t in caplog.record_tuples if "Polling IMDS" in t[2]]
         assert logs == backoff_logs
+
+
+class TestFetchProvisionData:
+    url = (
+        "http://169.254.169.254/metadata/"
+        "provisiondata?api-version=2019-06-01"
+    )
+    timeout = 30
+
+    def test_basic(
+        self,
+        caplog,
+        mock_requests_session_request,
+        wrapped_readurl,
+    ):
+        content = b"ovf content"
+        mock_requests_session_request.side_effect = [
+            mock.Mock(content=content),
+        ]
+
+        ovf = imds.fetch_provision_data(retry_deadline=300.0)
+
+        assert ovf == content
+        assert wrapped_readurl.mock_calls == [
+            mock.call(
+                self.url,
+                timeout=self.timeout,
+                headers_cb=imds.headers_cb,
+                exception_cb=mock.ANY,
+                infinite=True,
+                log_req_resp=False,
+            ),
+        ]
+        assert (
+            LOG_PATH,
+            logging.DEBUG,
+            "Polled IMDS provisiondata 1 time(s)",
+        ) in caplog.record_tuples
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            fake_http_error_for_code(404),
+            fake_http_error_for_code(429),
+            fake_http_error_for_code(500),
+            fake_http_error_for_code(502),
+            fake_http_error_for_code(503),
+            fake_http_error_for_code(504),
+        ],
+    )
+    @pytest.mark.parametrize("failures", [1, 5])
+    def test_retries_transient_errors(
+        self,
+        caplog,
+        mock_requests_session_request,
+        mock_url_helper_time_sleep,
+        error,
+        failures,
+    ):
+        content = b"ovf content"
+        mock_requests_session_request.side_effect = [error] * failures + [
+            mock.Mock(content=content),
+        ]
+
+        ovf = imds.fetch_provision_data(retry_deadline=1000000.0)
+
+        assert ovf == content
+        assert len(mock_requests_session_request.mock_calls) == failures + 1
+
+    def test_410_is_not_retried(
+        self,
+        caplog,
+        mock_requests_session_request,
+        mock_url_helper_time_sleep,
+    ):
+        error = fake_http_error_for_code(410)
+        mock_requests_session_request.side_effect = [
+            error,
+            mock.Mock(content=b"should not be used"),
+        ]
+
+        with pytest.raises(UrlError) as exc_info:
+            imds.fetch_provision_data(retry_deadline=1000000.0)
+
+        assert exc_info.value.code == 410
+        assert len(mock_requests_session_request.mock_calls) == 1
+        assert mock_url_helper_time_sleep.mock_calls == []
+
+    def test_retries_stop_at_deadline(
+        self,
+        caplog,
+        mock_requests_session_request,
+        mock_url_helper_time_sleep,
+    ):
+        # monotonic() is mocked to increment by 1 on each call; a small
+        # deadline forces the retry loop to give up and raise.
+        error = fake_http_error_for_code(404)
+        mock_requests_session_request.side_effect = [error] * 100
+
+        with pytest.raises(UrlError) as exc_info:
+            imds.fetch_provision_data(retry_deadline=3.0)
+
+        assert exc_info.value.code == 404
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            fake_http_error_for_code(400),
+            fake_http_error_for_code(403),
+            fake_http_error_for_code(
+                501
+            ),  # Not Implemented (unsupported host)
+            fake_http_error_for_code(505),
+        ],
+    )
+    def test_will_not_retry_errors(
+        self,
+        caplog,
+        mock_requests_session_request,
+        mock_url_helper_time_sleep,
+        error,
+    ):
+        """Non-transient codes (incl. 501) are not retried, so callers fall
+        back promptly on hosts that do not implement the endpoint."""
+        mock_requests_session_request.side_effect = [
+            error,
+            mock.Mock(content=b"should not be used"),
+        ]
+
+        with pytest.raises(UrlError) as exc_info:
+            imds.fetch_provision_data(retry_deadline=1000000.0)
+
+        assert exc_info.value.code == error.response.status_code
+        assert len(mock_requests_session_request.mock_calls) == 1
+        assert mock_url_helper_time_sleep.mock_calls == []
+
+    def test_connection_errors_capped(
+        self,
+        caplog,
+        mock_requests_session_request,
+        mock_url_helper_time_sleep,
+    ):
+        """Connection errors are bounded by max_connection_errors so we fall
+        back promptly when IMDS itself is unreachable."""
+        conn_error = requests.ConnectionError("unreachable")
+        mock_requests_session_request.side_effect = [conn_error] * 10
+
+        with pytest.raises(UrlError) as exc_info:
+            imds.fetch_provision_data(
+                retry_deadline=1000000.0, max_connection_errors=2
+            )
+
+        assert isinstance(exc_info.value.cause, requests.ConnectionError)
+        assert len(mock_requests_session_request.mock_calls) == 2

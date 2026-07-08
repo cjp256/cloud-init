@@ -129,18 +129,20 @@ class ReportableErrorDhcpOnNonPrimaryInterface(ReportableError):
 
 
 class ReportableErrorImdsUrlError(ReportableError):
-    def __init__(self, *, exception: UrlError, duration: float) -> None:
+    def __init__(
+        self, *, exception: UrlError, duration: float, endpoint: str = "IMDS"
+    ) -> None:
         # ConnectTimeout sub-classes ConnectError so order is important.
         if isinstance(exception.cause, requests.ConnectTimeout):
-            reason = "connection timeout querying IMDS"
+            reason = f"connection timeout querying {endpoint}"
         elif isinstance(exception.cause, requests.ConnectionError):
-            reason = "connection error querying IMDS"
+            reason = f"connection error querying {endpoint}"
         elif isinstance(exception.cause, requests.ReadTimeout):
-            reason = "read timeout querying IMDS"
+            reason = f"read timeout querying {endpoint}"
         elif exception.code:
-            reason = f"http error {exception.code} querying IMDS"
+            reason = f"http error {exception.code} querying {endpoint}"
         else:
-            reason = "unexpected error querying IMDS"
+            reason = f"unexpected error querying {endpoint}"
 
         super().__init__(reason)
 

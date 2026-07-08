@@ -200,7 +200,34 @@ def test_imds_url_error(exception, reason):
     assert error.supporting_data["url"] == fake_url
 
 
-def test_imds_metadata_parsing_exception():
+@pytest.mark.parametrize(
+    "exception,reason",
+    [
+        (
+            UrlError(requests.ConnectionError()),
+            "connection error querying IMDS provisiondata",
+        ),
+        (
+            UrlError(Exception(), code=410),
+            "http error 410 querying IMDS provisiondata",
+        ),
+    ],
+)
+def test_imds_url_error_endpoint(exception, reason):
+    duration = 123.4
+    fake_url = "fake://url"
+
+    exception.url = fake_url
+    error = errors.ReportableErrorImdsUrlError(
+        exception=exception,
+        duration=duration,
+        endpoint="IMDS provisiondata",
+    )
+
+    assert error.reason == reason
+    assert error.supporting_data["duration"] == duration
+    assert error.supporting_data["url"] == fake_url
+
     exception = ValueError("foobar")
 
     error = errors.ReportableErrorImdsMetadataParsingException(

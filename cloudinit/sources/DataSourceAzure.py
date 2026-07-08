@@ -70,6 +70,21 @@ class PPSType(Enum):
     UNKNOWN = "Unknown"
 
 
+class ProvisioningDataSource(Enum):
+    """Source used to obtain provisioning data (ovf-env.xml).
+
+    IMDS: only the IMDS /provisiondata endpoint.
+    MEDIA: only provisioning media (cdrom/seed dir/cache).
+    PREFER_IMDS: try IMDS /provisiondata first, fall back to media.
+    PREFER_MEDIA: try media first, fall back to IMDS /provisiondata.
+    """
+
+    IMDS = "imds"
+    MEDIA = "media"
+    PREFER_IMDS = "prefer-imds"
+    PREFER_MEDIA = "prefer-media"
+
+
 PLATFORM_ENTROPY_SOURCE: Optional[str] = "/sys/firmware/acpi/tables/OEM0"
 
 # List of static scripts and network config artifacts created by
@@ -298,6 +313,13 @@ BUILTIN_DS_CONFIG = {
     "experimental_fail_on_missing_customdata": False,
     "apply_network_config_set_name": True,  # Use set-name for NICs
     "experimental_skip_ready_report": False,  # Skip final ready report
+    # Source used to obtain provisioning data (ovf-env.xml). One of:
+    # "imds", "media", "prefer-imds", "prefer-media".  Upstream defaults to
+    # "prefer-media" (media first, IMDS /provisiondata only as a fallback) so
+    # the endpoint is not queried for VMs that have provisioning media.
+    # "prefer-imds" is opt-in (e.g. test images) while /provisiondata rolls
+    # out, since unsupported hosts answer with 404.
+    "provisioning_data_source": "prefer-media",
 }
 
 BUILTIN_CLOUD_EPHEMERAL_DISK_CONFIG = {
@@ -369,6 +391,7 @@ class DataSourceAzure(sources.DataSource):
             "experimental_fail_on_missing_customdata",
             "apply_network_config_set_name",
             "experimental_skip_ready_report",
+            "provisioning_data_source",
         ):
             self.ds_cfg.setdefault(key, BUILTIN_DS_CONFIG[key])
 
@@ -646,6 +669,148 @@ class DataSourceAzure(sources.DataSource):
                 )
                 self._report_failure(reportable_error)
 
+    def _get_provisioning_data_source(self) -> "ProvisioningDataSource":
+        """Return the configured provisioning data source.
+
+        Invalid or misspelled values fall back to the built-in default rather
+        than failing provisioning.
+        """
+        configured = self.ds_cfg["provisioning_data_source"]
+        normalized = str(configured).strip().lower()
+        try:
+            return ProvisioningDataSource(normalized)
+        except ValueError:
+            default = BUILTIN_DS_CONFIG["provisioning_data_source"]
+            report_diagnostic_event(
+                "Invalid provisioning_data_source=%r; using default %r"
+                % (configured, default),
+                logger_func=LOG.warning,
+            )
+            return ProvisioningDataSource(default)
+
+    @azure_ds_telemetry_reporter
+    def _load_ovf_from_media(
+        self, ddir: str
+    ) -> Optional[Tuple[dict, Any, dict, dict]]:
+        """Load ovf-env.xml from provisioning media.
+
+        Walks the seed dir, provisioning cdrom/udf devices, and the cached
+        data dir.  Azure removes/ejects the cdrom containing ovf-env.xml on
+        reboot, so the cached copy in the data dir is considered valid.
+
+        Sets self.seed and self._iso_dev on success.
+
+        :returns: (metadata, userdata_raw, cfg, files) or None if not found.
+        """
+        for src in list_possible_azure_ds(self.seed_dir, ddir):
+            try:
+                if src.startswith("/dev/"):
+                    if util.is_FreeBSD():
+                        md, userdata_raw, cfg, files = util.mount_cb(
+                            src, load_azure_ds_dir, mtype="udf"
+                        )
+                    else:
+                        md, userdata_raw, cfg, files = util.mount_cb(
+                            src, load_azure_ds_dir
+                        )
+                    # save the device for ejection later
+                    self._iso_dev = src
+                else:
+                    md, userdata_raw, cfg, files = load_azure_ds_dir(src)
+            except NonAzureDataSource:
+                report_diagnostic_event(
+                    "Did not find Azure data source in %s" % src,
+                    logger_func=LOG.debug,
+                )
+                continue
+            except util.MountFailedError:
+                report_diagnostic_event(
+                    "%s was not mountable" % src, logger_func=LOG.debug
+                )
+                continue
+
+            self.seed = src
+            report_diagnostic_event(
+                "Found provisioning metadata in %s" % self.seed,
+                logger_func=LOG.debug,
+            )
+            return (md, userdata_raw, cfg, files)
+
+        return None
+
+    @azure_ds_telemetry_reporter
+    def _fetch_provisiondata_ovf(
+        self,
+    ) -> Optional[Tuple[dict, Any, dict, dict]]:
+        """Fetch ovf-env.xml from the IMDS /provisiondata endpoint.
+
+        Sets self.seed on success.
+
+        :returns: (metadata, userdata_raw, cfg, files) on success, or None if
+            the endpoint is unavailable or returned unusable data and the
+            caller should fall back to provisioning media.
+        :raises errors.ReportableErrorImdsUrlError: on a non-retriable 410, as
+            the provisioning data has already been deleted.  Reported centrally
+            by _get_data.
+        """
+        start_time = monotonic()
+        # NOTE: IMDS currently returns 404 for hosts that do not support this
+        # endpoint (indistinguishable from "not written yet"), and we cannot
+        # change that today, so 404 is retried.  Bound the retry to 120s so
+        # media-less VMs on unsupported hosts do not hang.  With the upstream
+        # default (prefer-media) the endpoint is only reached when there is no
+        # provisioning media.  See imds.fetch_provision_data NOTE.
+        retry_deadline = start_time + 120
+        try:
+            contents = imds.fetch_provision_data(
+                retry_deadline=retry_deadline,
+                # If IMDS itself is unreachable (e.g. no IMDS on Azure Stack),
+                # fall back promptly rather than retrying until the deadline.
+                # Mirrors get_metadata_from_imds' connection-error allowance.
+                max_connection_errors=11,
+            )
+        except UrlError as error:
+            if error.code == 410:
+                # Provisioning data existed but has been deleted: this is
+                # non-retriable and unrecoverable.  It is fatal regardless of
+                # provisioning_data_source; we deliberately do NOT fall back to
+                # media, as a 410 indicates the provisioning window was missed.
+                report_diagnostic_event(
+                    "IMDS provisiondata gone (http error 410)",
+                    logger_func=LOG.error,
+                )
+                raise errors.ReportableErrorImdsUrlError(
+                    exception=error,
+                    duration=monotonic() - start_time,
+                    endpoint="IMDS provisiondata",
+                ) from error
+
+            report_diagnostic_event(
+                "IMDS provisiondata unavailable, will not use it: %s" % error,
+                logger_func=LOG.info,
+            )
+            return None
+
+        try:
+            md, ud, cfg = read_azure_ovf(contents)
+        except (NonAzureDataSource, errors.ReportableError) as error:
+            # A malformed or unexpected response must not brick provisioning:
+            # treat it as unusable so the caller falls back to provisioning
+            # media (prefer-* modes) or to minimal IMDS-derived metadata.
+            report_diagnostic_event(
+                "IMDS provisiondata returned unusable ovf-env.xml (%s); "
+                "will not use it" % error,
+                logger_func=LOG.warning,
+            )
+            return None
+
+        self.seed = "IMDS:provisiondata"
+        report_diagnostic_event(
+            "Found provisioning metadata in IMDS provisiondata",
+            logger_func=LOG.debug,
+        )
+        return (md, ud, cfg, {"ovf-env.xml": contents})
+
     @azure_ds_telemetry_reporter
     def crawl_metadata(self):
         """Walk all instance metadata sources returning a dict on success.
@@ -667,67 +832,77 @@ class DataSourceAzure(sources.DataSource):
         # need to look in the datadir and consider that valid
         ddir = self.ds_cfg["data_dir"]
 
-        # The order in which the candidates are inserted matters here, because
-        # it determines the value of ret. More specifically, the first one in
-        # the candidate list determines the path to take in order to get the
-        # metadata we need.
+        # The provisioning data (ovf-env.xml) may come from provisioning
+        # media and/or the IMDS /provisiondata endpoint.  The configured
+        # provisioning_data_source determines which is tried and in what
+        # order, and therefore the path taken to obtain the metadata we need.
         md = {"local-hostname": ""}
         cfg = {"system_info": {"default_user": {"name": ""}}}
         userdata_raw = ""
         files = {}
+        ovf: Optional[Tuple[dict, Any, dict, dict]] = None
 
-        for src in list_possible_azure_ds(self.seed_dir, ddir):
-            try:
-                if src.startswith("/dev/"):
-                    if util.is_FreeBSD():
-                        md, userdata_raw, cfg, files = util.mount_cb(
-                            src, load_azure_ds_dir, mtype="udf"
-                        )
-                    else:
-                        md, userdata_raw, cfg, files = util.mount_cb(
-                            src, load_azure_ds_dir
-                        )
-                    # save the device for ejection later
-                    self._iso_dev = src
-                else:
-                    md, userdata_raw, cfg, files = load_azure_ds_dir(src)
+        provisioning_data_source = self._get_provisioning_data_source()
 
-                self.seed = src
-                report_diagnostic_event(
-                    "Found provisioning metadata in %s" % self.seed,
-                    logger_func=LOG.debug,
-                )
-                break
-            except NonAzureDataSource:
-                report_diagnostic_event(
-                    "Did not find Azure data source in %s" % src,
-                    logger_func=LOG.debug,
-                )
-                continue
-            except util.MountFailedError:
-                report_diagnostic_event(
-                    "%s was not mountable" % src, logger_func=LOG.debug
-                )
-                continue
-        else:
+        # Provisioning media is network-free, so capture it first when media
+        # is the primary source (media, prefer-media).
+        if provisioning_data_source in (
+            ProvisioningDataSource.MEDIA,
+            ProvisioningDataSource.PREFER_MEDIA,
+        ):
+            ovf = self._load_ovf_from_media(ddir)
+            if ovf is not None:
+                md, userdata_raw, cfg, files = ovf
+
+        # If we read OVF from attached media, we are provisioning.  If OVF
+        # is not found, we are probably provisioning on a system which does
+        # not have UDF support.  In either case, require IMDS metadata.
+        # We also require robust networking whenever we intend to fetch
+        # provisioning data from the IMDS /provisiondata endpoint.
+        # If we require IMDS metadata, try harder to obtain networking,
+        # waiting for at least 20 minutes.  Otherwise only wait 5 minutes.
+        uses_imds_provisiondata = provisioning_data_source in (
+            ProvisioningDataSource.IMDS,
+            ProvisioningDataSource.PREFER_IMDS,
+        )
+        requires_imds_metadata = (
+            uses_imds_provisiondata or bool(self._iso_dev) or self.seed is None
+        )
+        timeout_minutes = 20 if requires_imds_metadata else 5
+        try:
+            self._setup_ephemeral_networking(timeout_minutes=timeout_minutes)
+        except NoDHCPLeaseError:
+            pass
+
+        # Fetch ovf-env.xml from IMDS /provisiondata when IMDS is the primary
+        # source (imds, prefer-imds), or as a fallback for prefer-media.
+        if ovf is None and provisioning_data_source in (
+            ProvisioningDataSource.IMDS,
+            ProvisioningDataSource.PREFER_IMDS,
+            ProvisioningDataSource.PREFER_MEDIA,
+        ):
+            if self._is_ephemeral_networking_up():
+                ovf = self._fetch_provisiondata_ovf()
+                if ovf is not None:
+                    md, userdata_raw, cfg, files = ovf
+
+        # prefer-imds falls back to provisioning media when the IMDS
+        # /provisiondata endpoint is unavailable.
+        if (
+            ovf is None
+            and provisioning_data_source == ProvisioningDataSource.PREFER_IMDS
+        ):
+            ovf = self._load_ovf_from_media(ddir)
+            if ovf is not None:
+                md, userdata_raw, cfg, files = ovf
+
+        if ovf is None:
             msg = (
                 "Unable to find provisioning media, falling back to IMDS "
                 "metadata. Be aware that IMDS metadata does not support "
                 "admin passwords or custom-data (user-data only)."
             )
             report_diagnostic_event(msg, logger_func=LOG.warning)
-
-        # If we read OVF from attached media, we are provisioning.  If OVF
-        # is not found, we are probably provisioning on a system which does
-        # not have UDF support.  In either case, require IMDS metadata.
-        # If we require IMDS metadata, try harder to obtain networking, waiting
-        # for at least 20 minutes.  Otherwise only wait 5 minutes.
-        requires_imds_metadata = bool(self._iso_dev) or self.seed is None
-        timeout_minutes = 20 if requires_imds_metadata else 5
-        try:
-            self._setup_ephemeral_networking(timeout_minutes=timeout_minutes)
-        except NoDHCPLeaseError:
-            pass
 
         imds_md = {}
         if self._is_ephemeral_networking_up():

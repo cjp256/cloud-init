@@ -1208,6 +1208,17 @@ class TestAzureDataSource:
             "fetch_metadata_with_api_fallback",
             mock.MagicMock(return_value=NETWORK_METADATA),
         )
+        # Default provisioning_data_source is prefer-media; media (set up in
+        # seed_dir) is used first.  Mock the IMDS /provisiondata endpoint as
+        # unavailable (404) so the media-less cases fall back cleanly without
+        # attempting a live IMDS fetch.
+        self.m_fetch_provision = mocker.patch.object(
+            dsaz.imds,
+            "fetch_provision_data",
+            side_effect=url_helper.UrlError(
+                requests.HTTPError("no provisiondata"), code=404
+            ),
+        )
         self.m_fallback_nic = mocker.patch(
             "cloudinit.sources.net.find_fallback_nic", return_value="eth9"
         )
@@ -4122,6 +4133,9 @@ class TestProvisioning:
         patched_reported_ready_marker_path,
     ):
         self.azure_ds = azure_ds
+        # Default these tests to the provisioning-media path.  The IMDS
+        # /provisiondata tests below override provisioning_data_source.
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "media"
         self.mock_azure_get_metadata_from_fabric = (
             mock_azure_get_metadata_from_fabric
         )
@@ -5668,6 +5682,234 @@ class TestProvisioning:
             ) in caplog.text
         else:
             assert "Did not find custom data in" not in caplog.text
+
+    # ------------------------------------------------------------------
+    # IMDS /provisiondata (provisioning_data_source) tests.
+    # ------------------------------------------------------------------
+    _PROVISIONDATA_CALL = mock.call(
+        "http://169.254.169.254/metadata/provisiondata?"
+        "api-version=2019-06-01",
+        timeout=30,
+        headers_cb=imds.headers_cb,
+        exception_cb=mock.ANY,
+        infinite=True,
+        log_req_resp=False,
+    )
+    _INSTANCE_CALL = mock.call(
+        "http://169.254.169.254/metadata/instance?"
+        "api-version=2021-08-01&extended=true",
+        timeout=30,
+        headers_cb=imds.headers_cb,
+        exception_cb=mock.ANY,
+        infinite=True,
+        log_req_resp=True,
+    )
+
+    def test_prefer_imds_uses_provisiondata(self):
+        """prefer-imds obtains ovf-env.xml from IMDS /provisiondata and does
+        not consult provisioning media."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "prefer-imds"
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        self.mock_readurl.side_effect = [
+            mock.MagicMock(contents=ovf.encode()),
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        # /provisiondata is queried first, then instance metadata.
+        assert self.mock_readurl.mock_calls == [
+            self._PROVISIONDATA_CALL,
+            self._INSTANCE_CALL,
+        ]
+
+        # Provisioning media is not consulted.
+        assert self.mock_util_mount_cb.mock_calls == []
+        assert self.azure_ds.seed == "IMDS:provisiondata"
+        assert self.azure_ds.metadata["imds"] == self.imds_md
+
+        # No iso device to eject; report ready with iso_dev=None.
+        assert self.mock_azure_get_metadata_from_fabric.mock_calls == [
+            mock.call(
+                endpoint="10.11.12.13",
+                distro=self.azure_ds.distro,
+                iso_dev=None,
+                pubkey_info=None,
+            )
+        ]
+        assert not self.mock_azure_report_failure_to_fabric.mock_calls
+        assert len(self.mock_kvp_report_success_to_host.mock_calls) == 1
+
+    def test_prefer_imds_falls_back_to_media(self):
+        """prefer-imds falls back to provisioning media when the IMDS
+        /provisiondata endpoint is unavailable (e.g. 404 at deadline)."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "prefer-imds"
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        md, ud, cfg = dsaz.read_azure_ovf(ovf)
+        self.mock_util_mount_cb.return_value = (md, ud, cfg, {})
+        self.mock_readurl.side_effect = [
+            url_helper.UrlError(requests.HTTPError("not found"), code=404),
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        # /provisiondata attempted first, then instance metadata (media
+        # supplied the OVF in between).
+        assert self.mock_readurl.mock_calls == [
+            self._PROVISIONDATA_CALL,
+            self._INSTANCE_CALL,
+        ]
+
+        # Media was consulted and used; iso device found on /dev/sr0.
+        assert self.azure_ds.seed == "/dev/sr0"
+        assert self.mock_azure_get_metadata_from_fabric.mock_calls == [
+            mock.call(
+                endpoint="10.11.12.13",
+                distro=self.azure_ds.distro,
+                iso_dev="/dev/sr0",
+                pubkey_info=None,
+            )
+        ]
+        assert not self.mock_azure_report_failure_to_fabric.mock_calls
+
+    def test_prefer_media_uses_media(self):
+        """prefer-media uses provisioning media and does not query IMDS
+        /provisiondata."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "prefer-media"
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        md, ud, cfg = dsaz.read_azure_ovf(ovf)
+        self.mock_util_mount_cb.return_value = (md, ud, cfg, {})
+        self.mock_readurl.side_effect = [
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        # Only instance metadata is queried; /provisiondata is not.
+        assert self.mock_readurl.mock_calls == [self._INSTANCE_CALL]
+        assert self.azure_ds.seed == "/dev/sr0"
+
+    def test_prefer_media_falls_back_to_provisiondata(self):
+        """prefer-media falls back to IMDS /provisiondata when no
+        provisioning media is present."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "prefer-media"
+        self.mock_util_mount_cb.side_effect = MountFailedError("no media")
+        self.mock_util_find_devs_with.return_value = []
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        self.mock_readurl.side_effect = [
+            mock.MagicMock(contents=ovf.encode()),
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        # Media attempted (and failed), then /provisiondata, then instance.
+        assert self.mock_readurl.mock_calls == [
+            self._PROVISIONDATA_CALL,
+            self._INSTANCE_CALL,
+        ]
+        assert self.azure_ds.seed == "IMDS:provisiondata"
+
+    def test_imds_only_does_not_fall_back_to_media(self):
+        """imds mode does not consult provisioning media when
+        /provisiondata is unavailable."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "imds"
+        self.mock_readurl.side_effect = [
+            url_helper.UrlError(requests.HTTPError("not found"), code=404),
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        assert self.mock_readurl.mock_calls == [
+            self._PROVISIONDATA_CALL,
+            self._INSTANCE_CALL,
+        ]
+        assert self.mock_util_mount_cb.mock_calls == []
+        assert self.azure_ds.seed == "IMDS"
+        assert self.azure_ds.metadata["imds"] == self.imds_md
+
+    @pytest.mark.parametrize("source", ["imds", "prefer-imds"])
+    def test_provisiondata_410_is_fatal(self, source):
+        """A 410 from IMDS /provisiondata is non-retriable and reported as a
+        provisioning failure.  It is fatal even in prefer-imds where media is
+        available: we deliberately do not fall back on 410."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = source
+        # Media is available, but must NOT be used as a fallback on 410.
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        md, ud, cfg = dsaz.read_azure_ovf(ovf)
+        self.mock_util_mount_cb.return_value = (md, ud, cfg, {})
+        self.mock_readurl.side_effect = [
+            url_helper.UrlError(requests.HTTPError("gone"), code=410),
+        ]
+
+        assert self.azure_ds._check_and_get_data() is False
+
+        # Only /provisiondata was queried; media was not consulted.
+        assert self.mock_readurl.mock_calls == [self._PROVISIONDATA_CALL]
+        assert self.mock_util_mount_cb.mock_calls == []
+        assert self.azure_ds.seed != "/dev/sr0"
+
+        # Failure reported to fabric and via KVP with the provisiondata reason.
+        assert len(self.mock_azure_report_failure_to_fabric.mock_calls) == 1
+        assert len(self.mock_kvp_report_via_kvp.mock_calls) == 1
+        assert not self.mock_kvp_report_success_to_host.mock_calls
+        encoded_report = self.mock_kvp_report_via_kvp.mock_calls[0].args[0]
+        assert (
+            "reason=http error 410 querying IMDS provisiondata"
+            in encoded_report
+        )
+
+    @pytest.mark.parametrize("content", [b"garbage not xml", b"<not-ovf/>"])
+    def test_prefer_imds_falls_back_on_unusable_provisiondata(self, content):
+        """prefer-imds falls back to provisioning media when /provisiondata
+        returns malformed or non-Azure content instead of bricking."""
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "prefer-imds"
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        md, ud, cfg = dsaz.read_azure_ovf(ovf)
+        self.mock_util_mount_cb.return_value = (md, ud, cfg, {})
+        self.mock_readurl.side_effect = [
+            mock.MagicMock(contents=content),
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        # Unusable provisiondata -> fall back to media.
+        assert self.mock_readurl.mock_calls == [
+            self._PROVISIONDATA_CALL,
+            self._INSTANCE_CALL,
+        ]
+        assert self.azure_ds.seed == "/dev/sr0"
+        assert not self.mock_azure_report_failure_to_fabric.mock_calls
+
+    def test_invalid_provisioning_data_source_uses_default(self, caplog):
+        """An invalid provisioning_data_source value warns and falls back to
+        the built-in default (prefer-media) rather than failing provisioning.
+        """
+        self.azure_ds.ds_cfg["provisioning_data_source"] = "bogus"
+        ovf = construct_ovf_env(provision_guest_proxy_agent=False)
+        md, ud, cfg = dsaz.read_azure_ovf(ovf)
+        self.mock_util_mount_cb.return_value = (md, ud, cfg, {})
+        self.mock_readurl.side_effect = [
+            mock.MagicMock(contents=json.dumps(self.imds_md).encode()),
+        ]
+        self.mock_azure_get_metadata_from_fabric.return_value = []
+
+        self.azure_ds._check_and_get_data()
+
+        # Default (prefer-media) is used: media supplies the OVF and
+        # /provisiondata is not queried.
+        assert self.mock_readurl.mock_calls == [self._INSTANCE_CALL]
+        assert self.azure_ds.seed == "/dev/sr0"
+        assert "Invalid provisioning_data_source='bogus'" in caplog.text
 
 
 class TestCheckAzureProxyAgent:
