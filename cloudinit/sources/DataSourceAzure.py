@@ -321,7 +321,7 @@ BUILTIN_DS_CONFIG = {
     # the endpoint is not queried for VMs that have provisioning media.
     # "prefer-imds" is opt-in (e.g. test images) while /provisiondata rolls
     # out, since unsupported hosts answer with 404.
-    "provisioning_data_source": "prefer-media",
+    "provisioning_data_source": "prefer-imds",
 }
 
 BUILTIN_CLOUD_EPHEMERAL_DISK_CONFIG = {
