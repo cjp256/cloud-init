@@ -2199,8 +2199,8 @@ def read_azure_ovf(contents):
     :raises NonAzureDataSource: if XML is not in Azure's format.
     :raises errors.ReportableError: if XML is unparsable or invalid.
     """
-    ovf_env = OvfEnvXml.parse_text(contents)
     LOG.error("Reading ovf-env.xml: %s", contents.decode("utf-8", "ignore"))
+    ovf_env = OvfEnvXml.parse_text(contents)
 
     md: Dict[str, Any] = {}
     cfg = {}
