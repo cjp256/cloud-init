@@ -788,7 +788,7 @@ class DataSourceAzure(sources.DataSource):
                 ) from error
 
             report_diagnostic_event(
-                "IMDS provisiondata unavailable, will not use it: %s" % error,
+                "IMDS provisiondata unavailable, will not use it: %r" % error,
                 logger_func=LOG.info,
             )
             return None
@@ -800,7 +800,7 @@ class DataSourceAzure(sources.DataSource):
             # treat it as unusable so the caller falls back to provisioning
             # media (prefer-* modes) or to minimal IMDS-derived metadata.
             report_diagnostic_event(
-                "IMDS provisiondata returned unusable ovf-env.xml (%s); "
+                "IMDS provisiondata returned unusable ovf-env.xml (%r); "
                 "will not use it" % error,
                 logger_func=LOG.warning,
             )
