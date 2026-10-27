@@ -630,7 +630,7 @@ class GoalStateHealthReporter:
                 "exception while reporting ready: %s" % e,
                 logger_func=LOG.error,
             )
-            raise
+            return
 
         LOG.info("Reported ready to Azure fabric.")
 
@@ -649,7 +649,7 @@ class GoalStateHealthReporter:
         except Exception as e:
             msg = "exception while reporting failure: %s" % e
             report_diagnostic_event(msg, logger_func=LOG.error)
-            raise
+            return
 
         LOG.warning("Reported failure to Azure fabric.")
 
@@ -705,6 +705,7 @@ class GoalStateHealthReporter:
 
         LOG.debug("Sending health report to Azure fabric.")
         url = "http://{}/machine?comp=health".format(self._endpoint)
+        LOG.debug("Azure health request: POST %s\n%s", url, document.decode())
         self._azure_endpoint_client.post(
             url,
             data=document,

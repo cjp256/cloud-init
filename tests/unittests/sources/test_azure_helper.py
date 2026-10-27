@@ -679,6 +679,60 @@ class TestGoalStateHealthReporter:
                 == self.post.call_args
             )
 
+    @pytest.mark.parametrize("signal", ["ready", "failure"])
+    @pytest.mark.parametrize(
+        "error",
+        [
+            url_helper.UrlError("health endpoint unavailable"),
+            RuntimeError("unexpected health error"),
+        ],
+    )
+    def test_health_request_errors_are_logged_and_ignored(
+        self, signal, error, caplog
+    ):
+        self.post.side_effect = error
+        reporter = azure_helper.GoalStateHealthReporter(
+            self.GoalState(),
+            azure_helper.AzureEndpointHttpClient(mock.MagicMock()),
+            self.test_azure_endpoint,
+        )
+
+        if signal == "ready":
+            reporter.send_ready_signal()
+        else:
+            reporter.send_failure_signal(
+                self.provisioning_failure_err_description
+            )
+
+        self.post.assert_called_once()
+        assert self.test_health_report_url in caplog.text
+        assert self.post.call_args.kwargs["data"].decode() in caplog.text
+        assert str(error) in caplog.text
+        assert f"exception while reporting {signal}" in caplog.text
+        assert "Successfully sent health report" not in caplog.text
+        assert "Reported ready to Azure fabric." not in caplog.text
+        assert "Reported failure to Azure fabric." not in caplog.text
+
+    @pytest.mark.parametrize("signal", ["ready", "failure"])
+    def test_health_requests_are_logged(self, signal, caplog):
+        reporter = azure_helper.GoalStateHealthReporter(
+            self.GoalState(),
+            azure_helper.AzureEndpointHttpClient(mock.MagicMock()),
+            self.test_azure_endpoint,
+        )
+
+        if signal == "ready":
+            reporter.send_ready_signal()
+        else:
+            reporter.send_failure_signal(
+                self.provisioning_failure_err_description
+            )
+
+        self.post.assert_called_once()
+        assert self.test_health_report_url in caplog.text
+        assert self.post.call_args.kwargs["data"].decode() in caplog.text
+        assert "Successfully sent health report" in caplog.text
+
     def test_build_report_for_ready_signal_health_document(self):
         health_document = self._get_report_ready_health_document()
         reporter = azure_helper.GoalStateHealthReporter(
@@ -1209,23 +1263,25 @@ class TestWALinuxAgentShim:
                 description="TestDesc",
             )
 
-    def test_failure_to_send_report_ready_health_doc_bubbles_up(self):
+    def test_failure_to_send_report_ready_health_doc_is_ignored(self, caplog):
         self.AzureEndpointHttpClient.return_value.post.side_effect = (
             url_helper.UrlError("retry", code=404)
         )
         shim = wa_shim(endpoint="test_endpoint")
-        with pytest.raises(url_helper.UrlError):
-            shim.register_with_azure_and_fetch_data(None)
+        shim.register_with_azure_and_fetch_data(None)
+        assert "exception while reporting ready" in caplog.text
 
-    def test_failure_to_send_report_failure_health_doc_bubbles_up(self):
+    def test_failure_to_send_report_failure_health_doc_is_ignored(
+        self, caplog
+    ):
         self.AzureEndpointHttpClient.return_value.post.side_effect = (
             url_helper.UrlError("retry", code=404)
         )
         shim = wa_shim(endpoint="test_endpoint")
-        with pytest.raises(url_helper.UrlError):
-            shim.register_with_azure_and_report_failure(
-                description="TestDesc",
-            )
+        shim.register_with_azure_and_report_failure(
+            description="TestDesc",
+        )
+        assert "exception while reporting failure" in caplog.text
 
 
 class TestGetMetadataGoalStateXMLAndReportReadyToFabric:
