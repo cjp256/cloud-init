@@ -302,7 +302,12 @@ class TestAzureEndpointHttpClient:
         assert 1 == m_http_with_retries.call_count
         assert m_http_with_retries.return_value == response
         assert (
-            mock.call(url, data=m_data, headers=self.regular_headers)
+            mock.call(
+                url,
+                data=m_data,
+                headers=self.regular_headers,
+                timeout_minutes=20,
+            )
             == m_http_with_retries.call_args
         )
 
@@ -324,7 +329,12 @@ class TestAzureEndpointHttpClient:
         expected_headers.update(extra_headers)
         assert 1 == m_http_with_retries.call_count
         assert (
-            mock.call(url, data=mock.ANY, headers=expected_headers)
+            mock.call(
+                url,
+                data=mock.ANY,
+                headers=expected_headers,
+                timeout_minutes=20,
+            )
             == m_http_with_retries.call_args
         )
 
@@ -557,6 +567,37 @@ class TestOpenSSLManagerActions:
             assert fp in keys_by_fp
 
 
+@pytest.mark.parametrize("signal", ["ready", "failure"])
+def test_health_post_retries_for_one_minute(signal, mocker, caplog):
+    error = url_helper.UrlError("health endpoint unavailable", code=500)
+    readurl = mocker.patch.object(
+        azure_helper.url_helper,
+        "readurl",
+        side_effect=error,
+    )
+    sleep = mocker.patch.object(azure_helper, "sleep")
+    clock = mocker.patch.object(azure_helper, "time", side_effect=[0, 0, 59])
+    goal_state = mock.MagicMock(
+        incarnation="1", container_id="container", instance_id="instance"
+    )
+    reporter = azure_helper.GoalStateHealthReporter(
+        goal_state,
+        azure_helper.AzureEndpointHttpClient("certificate"),
+        "endpoint",
+    )
+
+    if signal == "ready":
+        reporter.send_ready_signal()
+    else:
+        reporter.send_failure_signal("provisioning failed")
+
+    assert readurl.call_count == 2
+    assert clock.call_count == 3
+    assert sleep.call_args_list == [mock.call(0), mock.call(1)]
+    assert "health endpoint unavailable" in caplog.text
+    assert "Successfully sent health report" not in caplog.text
+
+
 class TestGoalStateHealthReporter:
     maxDiff = None
 
@@ -651,6 +692,7 @@ class TestGoalStateHealthReporter:
                     self.test_health_report_url,
                     data=m_build_report.return_value,
                     extra_headers=self.test_default_headers,
+                    timeout_minutes=1,
                 )
                 == self.post.call_args
             )
@@ -675,6 +717,7 @@ class TestGoalStateHealthReporter:
                     self.test_health_report_url,
                     data=m_build_report.return_value,
                     extra_headers=self.test_default_headers,
+                    timeout_minutes=1,
                 )
                 == self.post.call_args
             )
@@ -1107,7 +1150,12 @@ class TestWALinuxAgentShim:
         shim.register_with_azure_and_fetch_data(distro=None)
         expected_url = "http://test_endpoint/machine?comp=health"
         assert [
-            mock.call(expected_url, data=mock.ANY, extra_headers=mock.ANY)
+            mock.call(
+                expected_url,
+                data=mock.ANY,
+                extra_headers=mock.ANY,
+                timeout_minutes=1,
+            )
         ] == self.AzureEndpointHttpClient.return_value.post.call_args_list
 
     def test_correct_url_used_for_report_failure(self):
@@ -1115,7 +1163,12 @@ class TestWALinuxAgentShim:
         shim.register_with_azure_and_report_failure(description="TestDesc")
         expected_url = "http://test_endpoint/machine?comp=health"
         assert [
-            mock.call(expected_url, data=mock.ANY, extra_headers=mock.ANY)
+            mock.call(
+                expected_url,
+                data=mock.ANY,
+                extra_headers=mock.ANY,
+                timeout_minutes=1,
+            )
         ] == self.AzureEndpointHttpClient.return_value.post.call_args_list
 
     def test_goal_state_values_used_for_report_ready(self):

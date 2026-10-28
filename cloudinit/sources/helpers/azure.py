@@ -349,13 +349,20 @@ class AzureEndpointHttpClient:
         return http_with_retries(url, headers=headers)
 
     def post(
-        self, url, data: Optional[bytes] = None, extra_headers=None
+        self,
+        url,
+        data: Optional[bytes] = None,
+        extra_headers=None,
+        *,
+        timeout_minutes: int = 20,
     ) -> url_helper.UrlResponse:
         headers = self.headers
         if extra_headers is not None:
             headers = self.headers.copy()
             headers.update(extra_headers)
-        return http_with_retries(url, data=data, headers=headers)
+        return http_with_retries(
+            url, data=data, headers=headers, timeout_minutes=timeout_minutes
+        )
 
 
 class InvalidGoalStateXMLException(Exception):
@@ -710,6 +717,7 @@ class GoalStateHealthReporter:
             url,
             data=document,
             extra_headers={"Content-Type": "text/xml; charset=utf-8"},
+            timeout_minutes=1,
         )
         LOG.debug("Successfully sent health report to Azure fabric")
 
