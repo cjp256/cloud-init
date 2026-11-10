@@ -3663,6 +3663,41 @@ class TestEphemeralNetworking:
 
         assert azure_ds._ephemeral_dhcp_ctx is None
 
+    def test_rescan_when_named_interface_already_missing(
+        self,
+        azure_ds,
+        caplog,
+        mock_ephemeral_dhcp_v4,
+        mock_find_primary_nic,
+        mock_get_interface_details,
+        mock_sleep,
+    ):
+        mock_get_interface_details.side_effect = [
+            (None, None),
+            ("52:54:00:65:43:21", "virtio_net"),
+        ]
+        mock_find_primary_nic.return_value = "enp1s0"
+        ctx = mock_ephemeral_dhcp_v4.return_value
+        attempted_ifaces = []
+
+        def obtain_lease():
+            attempted_ifaces.append(ctx.iface)
+            return {"interface": "enp1s0"}
+
+        ctx.obtain_lease.side_effect = obtain_lease
+
+        assert azure_ds._setup_ephemeral_networking(iface="eth0") is True
+
+        assert attempted_ifaces == ["enp1s0"]
+        assert ctx.iface == "enp1s0"
+        mock_find_primary_nic.assert_called_once_with()
+        assert mock_get_interface_details.call_args_list == [
+            mock.call("eth0"),
+            mock.call("enp1s0"),
+        ]
+        mock_sleep.assert_not_called()
+        assert "DHCP interface eth0 unavailable; rescanning" in caplog.text
+
     def test_retry_interface_error(
         self,
         azure_ds,
@@ -4120,6 +4155,7 @@ class TestProvisioning:
         mock_ephemeral_ipv4_network,
         mock_dmi_read_dmi_data,
         mock_get_interfaces,
+        mock_get_interface_details,
         mock_get_interface_mac,
         mock_kvp_report_via_kvp,
         mock_kvp_report_success_to_host,
@@ -4150,6 +4186,10 @@ class TestProvisioning:
         self.mock_ephemeral_ipv4_network = mock_ephemeral_ipv4_network
         self.mock_dmi_read_dmi_data = mock_dmi_read_dmi_data
         self.mock_get_interfaces = mock_get_interfaces
+        mock_get_interface_details.return_value = (
+            "00:11:22:33:44:00",
+            "hv_netvsc",
+        )
         self.mock_get_interface_mac = mock_get_interface_mac
         self.mock_kvp_report_via_kvp = mock_kvp_report_via_kvp
         self.mock_kvp_report_success_to_host = mock_kvp_report_success_to_host

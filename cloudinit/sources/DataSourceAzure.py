@@ -429,6 +429,7 @@ class DataSourceAzure(sources.DataSource):
         not kill dhclient, so the timeout in practice may be up to
         timeout_minutes + the system-configured timeout for dhclient.
 
+        :param iface: Interface to configure; rescan if no longer found.
         :param timeout_minutes: Number of minutes to keep retrying for.
 
         :raises NoDHCPLeaseError: If unable to obtain DHCP lease.
@@ -461,6 +462,15 @@ class DataSourceAzure(sources.DataSource):
                         iface = find_primary_nic()
 
                     mac, driver = get_interface_details(iface)
+                    if not update_primary_nic and mac is None:
+                        report_diagnostic_event(
+                            "DHCP interface %s unavailable; rescanning "
+                            "for the primary NIC" % iface,
+                            logger_func=LOG.warning,
+                        )
+                        update_primary_nic = True
+                        iface = find_primary_nic()
+                        mac, driver = get_interface_details(iface)
 
                     report_diagnostic_event(
                         "Bringing up ephemeral networking with "
